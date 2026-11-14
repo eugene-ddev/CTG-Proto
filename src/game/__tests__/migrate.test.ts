@@ -34,7 +34,8 @@ describe('миграция сейва', () => {
     const { inventory, ...base } = freshState();
     const old = {
       ...base,
-      inventory: inventory.filter((e) => e.itemId !== 'cube'),
+      // стартовый набор сам содержит осколки (все предметы) — в старом сейве их в инвентаре не было
+      inventory: inventory.filter((e) => e.itemId !== 'cube' && e.itemId !== SHARD_ID),
       cubes: 250,
       shards: 10,
       arenaRun: null,

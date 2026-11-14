@@ -199,3 +199,25 @@ describe('серии двух видов', () => {
     expect(lost.characters[0].rucksack).toBeNull();
   });
 });
+
+describe('стартовый набор и «+ все предметы»', () => {
+  it('новый игрок: три стопки кубов по 500 и все предметы полными стопками', async () => {
+    const { ITEMS } = await import('../../data/catalog');
+    const s = createInitialState(START, BLUEPRINTS.map((b) => b.id), maxStackOf, ITEMS.map((i) => i.id));
+    expect(s.inventory.filter((e) => e.itemId === 'cube').map((e) => e.count)).toEqual([500, 500, 500]);
+    for (const item of ITEMS) {
+      if (item.id === 'cube') continue;
+      const stacks = s.inventory.filter((e) => e.itemId === item.id);
+      expect(stacks.map((e) => e.count), item.id).toEqual([maxStackOf(item.id)]);
+    }
+    expect(maxStackOf('restoreStrengthVial')).toBe(10);
+  });
+
+  it('«+ все предметы»: каждого предмета прибавляется полная стопка', async () => {
+    const { ITEMS } = await import('../../data/catalog');
+    const before = fresh();
+    const after = applyAction(before, 'debugGiveAllItems', [], ctx)!;
+    const count = (s: typeof before, id: string) => s.inventory.filter((e) => e.itemId === id).reduce((n, e) => n + e.count, 0);
+    for (const item of ITEMS) expect(count(after, item.id) - count(before, item.id), item.id).toBe(maxStackOf(item.id));
+  });
+});

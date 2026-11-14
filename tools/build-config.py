@@ -248,7 +248,7 @@ def main():
             assert POTION_PREFAB_STAT[color] == stat
             items.append(dict(id=item_id, kind='potion', name=f'{title} {gen}',
                               description=f'Восстанавливает {amount} разбит{"ый куб" if amount == 1 else "ых куба"} {gen}',
-                              restoreStat=stat, restoreAmount=amount, maxStack=5, tint=STAT_TINT[stat], blueprintId=bp_id))
+                              restoreStat=stat, restoreAmount=amount, maxStack=10, tint=STAT_TINT[stat], blueprintId=bp_id))
             variants.append(dict(key=stat, label=STAT_NOM[stat], itemId=item_id, tint=STAT_TINT[stat]))
         blueprints.append(dict(id=bp_id, kind='potion', name=title, variantLabel='Стата', restoreAmount=amount, variants=variants, blocks=blocks))
 

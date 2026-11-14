@@ -2,7 +2,7 @@
 // Изменить его можно только действием (store.act, список — core/actions.ts): действие исполняется сразу здесь
 // и уходит на сервер, который исполняет его сам над состоянием из базы и сверяет итог. Разошлись — берётся
 // состояние сервера.
-import { BLUEPRINTS, COMBAT, START, maxStackOf } from '../data/catalog';
+import { BLUEPRINTS, COMBAT, ITEMS, START, maxStackOf } from '../data/catalog';
 import type { ArenaRun } from '../core/arena';
 import { browserStorage, type KeyValueStorage } from '../core/save';
 import { SHARD_ID, SHARD_STACK, STATE_VERSION, addCubes, addItem, createInitialState, type PlayerState } from '../core/state';
@@ -38,7 +38,7 @@ const SEND_RETRY_MS = 3000;
 
 const maxStack = (itemId: string) => maxStackOf(itemId);
 
-export const freshState = () => createInitialState(START, BLUEPRINTS.map((b) => b.id), maxStack);
+export const freshState = () => createInitialState(START, BLUEPRINTS.map((b) => b.id), maxStack, ITEMS.map((i) => i.id));
 
 class Store {
   /** localStorage — только для отладочных настроек; прогресс хранится на сервере. */

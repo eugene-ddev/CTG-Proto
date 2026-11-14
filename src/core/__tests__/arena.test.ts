@@ -214,10 +214,10 @@ describe('рюкзак: перетаскивание между ячейками
     st = moveInBag(st, uid, 0, 4)!;
     expect(st.characters[0].bag[0]?.itemId).toBe('rustyAxe');
     expect(st.characters[0].bag[4]).toMatchObject({ itemId: 'restoreStrengthFlask', count: 2 });
-    st = addItem(st, 'restoreStrengthFlask', 4, maxStack('restoreStrengthFlask'));
+    st = addItem(st, 'restoreStrengthFlask', 9, maxStack('restoreStrengthFlask'));
     st = putInBag(st, uid, 2, st.inventory.find((e) => e.itemId === 'restoreStrengthFlask')!.uid)!;
-    st = moveInBag(st, uid, 2, 4)!; // 4 + 2, стопка до 5: в 4 — 5, в 2 — 1
-    expect(st.characters[0].bag[4]?.count).toBe(5);
+    st = moveInBag(st, uid, 2, 4)!; // 9 + 2, стопка до 10: в 4 — 10, в 2 — 1
+    expect(st.characters[0].bag[4]?.count).toBe(10);
     expect(st.characters[0].bag[2]?.count).toBe(1);
     expect(moveInBag(st, uid, 3, 0)).toBeNull(); // из пустой — нечего
     const inSeries = finishFight(markInBattle(startRun(st, uid)!)!, win([], []))!.state;

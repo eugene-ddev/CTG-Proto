@@ -22,7 +22,7 @@ const blueprintOf = (itemId: string) => {
 describe('крафт', () => {
   it('меч вручную: −8 кубов, меч в инвентаре, открыта автосборка', () => {
     const r = completeCraft(fresh(), getBlueprint('bp-sword'), { manual: true, maxStack })!;
-    expect(cubeCount(r.state)).toBe(292);
+    expect(cubeCount(r.state)).toBe(START.cubes - 8);
     expect(r.state.inventory.some((e) => e.itemId === 'rustySword')).toBe(true);
     expect(canAutoCraft(r.state, 'bp-sword')).toBe(true);
   });
@@ -32,7 +32,7 @@ describe('крафт', () => {
   it('лобстер: −38 кубов, сразу персонаж — имя по умолчанию, без снаряжения', () => {
     expect(completeCraft(fresh(), getBlueprint('bp-lobster'), { manual: true, maxStack })).toBeNull(); // без стат нельзя
     const r = completeCraft(fresh(), getBlueprint('bp-lobster'), { manual: true, maxStack, blockStats: allStr(38) })!;
-    expect(cubeCount(r.state)).toBe(262);
+    expect(cubeCount(r.state)).toBe(START.cubes - 38);
     const c = r.state.characters[0];
     expect(c).toEqual({ uid: expect.any(String), name: 'Лобстер 1', blueprintId: 'bp-lobster', blockStats: allStr(38), brokenBlocks: [], equipment: [null, null, null, null, null], rucksack: null, bag: [] });
     expect(r.result).toEqual({ kind: 'character', blueprintId: 'bp-lobster', charUid: c.uid });

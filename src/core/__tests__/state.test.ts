@@ -21,8 +21,8 @@ describe('начальное состояние', () => {
     expect(cubeCount(s)).toBe(300);
     expect(s.unlockedBlueprints).toEqual(['bp-a', 'bp-b']);
     expect(pots(s).map((e) => e.count)).toEqual([5, 2]);
-    expect(s.inventory.filter((e) => e.itemId === 'cube').map((e) => e.count)).toEqual([100, 100, 100]); // кубы — стопки по 100
-    expect(new Set(s.inventory.map((e) => e.uid)).size).toBe(5);
+    expect(s.inventory.filter((e) => e.itemId === 'cube').map((e) => e.count)).toEqual([300]); // кубы — стопки по 500
+    expect(new Set(s.inventory.map((e) => e.uid)).size).toBe(3);
   });
 });
 
