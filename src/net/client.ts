@@ -1,5 +1,6 @@
 // Связь с сервером (Nakama, CTG-Proto-Backend): вход по device id, вызовы RPC.
-// Адрес сервера: ?server=host:port в адресе страницы, иначе VITE_NAKAMA_HOST / VITE_NAKAMA_PORT, иначе 127.0.0.1:7450.
+// Адрес сервера: ?server=host:port в адресе страницы (порт 443 — по HTTPS), иначе VITE_NAKAMA_HOST / _PORT / _SSL,
+// иначе для выложенной сборки — домен самой страницы, иначе 127.0.0.1:7450.
 // ?profile=имя — отдельный игрок в том же браузере (свой device id): удобно проверять бои с игроками в двух вкладках.
 import { Client, type Session } from '@heroiclabs/nakama-js';
 import type { ActionCall } from '../core/actions';
@@ -69,9 +70,15 @@ export class NetError extends Error {
 const params = new URLSearchParams(typeof location === 'undefined' ? '' : location.search);
 const env = import.meta.env ?? {};
 const [paramHost, paramPort] = (params.get('server') ?? '').split(':');
-const HOST = paramHost || (env.VITE_NAKAMA_HOST as string | undefined) || '127.0.0.1';
-const PORT = paramPort || (env.VITE_NAKAMA_PORT as string | undefined) || '7450';
-const SSL = (env.VITE_NAKAMA_SSL as string | undefined) === 'true';
+const envHost = env.VITE_NAKAMA_HOST as string | undefined;
+// Выложенная сборка, открытая с домена: сервер — тот же домен (Caddy отдаёт и клиент, и API), адрес в сборку не зашивается.
+const page = typeof location === 'undefined' ? null : location;
+const sameOrigin =
+  !paramHost && !envHost && !!env.PROD && !!page && /^https?:$/.test(page.protocol) && !/^(localhost|127\.0\.0\.1|\[::1\])$/.test(page.hostname);
+const pageSsl = page?.protocol === 'https:';
+const HOST = paramHost || envHost || (sameOrigin ? page!.hostname : '127.0.0.1');
+const PORT = paramPort || (paramHost ? '' : (env.VITE_NAKAMA_PORT as string | undefined)) || (sameOrigin ? page!.port || (pageSsl ? '443' : '80') : '7450');
+const SSL = paramHost ? PORT === '443' : sameOrigin ? pageSsl : (env.VITE_NAKAMA_SSL as string | undefined) === 'true';
 const SERVER_KEY = (env.VITE_NAKAMA_KEY as string | undefined) || 'defaultkey';
 const PROFILE = params.get('profile') ?? '';
 const DEVICE_KEY = `ctg-net-device${PROFILE ? `:${PROFILE}` : ''}`;
