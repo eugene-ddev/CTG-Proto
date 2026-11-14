@@ -1,0 +1,28 @@
+{
+  "name": "ctg-prototype",
+  "private": true,
+  "version": "0.0.108",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "build:single": "tsc --noEmit && vite build --mode single",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "config": "python3 tools/build-config.py",
+    "sim": "vitest run --config tools/sim/vitest.config.ts",
+    "tune": "vitest run --config tools/tune/vitest.config.ts"
+  },
+  "dependencies": {
+    "phaser": "^4.2.1",
+    "three": "^0.187.0"
+  },
+  "devDependencies": {
+    "@types/three": "^0.187.0",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.6",
+    "vite-plugin-singlefile": "^2.3.4",
+    "vitest": "^5.1.0"
+  }
+}

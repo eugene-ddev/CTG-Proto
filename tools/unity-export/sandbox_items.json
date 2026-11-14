@@ -1,0 +1,815 @@
+[
+ {
+  "file": "Consumables/BlackRestoreFlask.asset",
+  "id": "",
+  "title": "Большой флакон брони",
+  "description": "Восстанавливает 6 блоков брони",
+  "icon": "icon:blackRestoreFlask",
+  "prefab": null,
+  "ability": {
+   "type": 2.0,
+   "cooldown": 2.0,
+   "staminaCost": 0.0,
+   "manaCost": 0.0,
+   "range": 3.0,
+   "damageMin": 1.0,
+   "damageMax": 3.0,
+   "effectGuids": [
+    "2421fcca96776d043805ccc075bdacb9"
+   ]
+  },
+  "raw": {
+   "_title": "\"\\u0411\\u043E\\u043B\\u044C\\u0448\\u043E\\u0439 \\u0444\\u043B\\u0430\\u043A\\u043E\\u043D",
+   "_description": "\"\\u0412\\u043E\\u0441\\u0441\\u0442\\u0430\\u043D\\u0430\\u0432\\u043B\\u0438\\u0432\\u0430\\u0435\\u0442",
+   "_icon": "icon:blackRestoreFlask",
+   "_count": "5",
+   "_maxStack": "5",
+   "_infinite": "0"
+  },
+  "guid": "73eb50f9f9240d06e80b3c60478d09a2"
+ },
+ {
+  "file": "Consumables/BlackRestoreVial.asset",
+  "id": "",
+  "title": "Малый флакон брони",
+  "description": "Восстанавливает 3 блока брони",
+  "icon": "icon:blackRestoreVial",
+  "prefab": null,
+  "ability": {
+   "type": 2.0,
+   "cooldown": 2.0,
+   "staminaCost": 0.0,
+   "manaCost": 0.0,
+   "range": 3.0,
+   "damageMin": 1.0,
+   "damageMax": 3.0,
+   "effectGuids": [
+    "9a8daf8afb7f7f546addd9da4ed66e76"
+   ]
+  },
+  "raw": {
+   "_title": "\"\\u041C\\u0430\\u043B\\u044B\\u0439 \\u0444\\u043B\\u0430\\u043A\\u043E\\u043D \\u0431\\u0440\\u043E\\u043D\\u0438\"",
+   "_description": "\"\\u0412\\u043E\\u0441\\u0441\\u0442\\u0430\\u043D\\u0430\\u0432\\u043B\\u0438\\u0432\\u0430\\u0435\\u0442",
+   "_icon": "icon:blackRestoreVial",
+   "_count": "5",
+   "_maxStack": "5",
+   "_infinite": "0"
+  },
+  "guid": "97f408a5157c13343bcab3aedb31d848"
+ },
+ {
+  "file": "Consumables/BlueRestoreFlask.asset",
+  "id": "",
+  "title": "Большой флакон интеллекта",
+  "description": "Восстанавливает 6 блоков интеллекта",
+  "icon": "icon:blueRestoreFlask",
+  "prefab": null,
+  "ability": {
+   "type": 2.0,
+   "cooldown": 2.0,
+   "staminaCost": 0.0,
+   "manaCost": 0.0,
+   "range": 3.0,
+   "damageMin": 1.0,
+   "damageMax": 3.0,
+   "effectGuids": [
+    "8b8a434f36d01b3f444c221e29b41d12"
+   ]
+  },
+  "raw": {
+   "_title": "\"\\u0411\\u043E\\u043B\\u044C\\u0448\\u043E\\u0439 \\u0444\\u043B\\u0430\\u043A\\u043E\\u043D",
+   "_description": "\"\\u0412\\u043E\\u0441\\u0441\\u0442\\u0430\\u043D\\u0430\\u0432\\u043B\\u0438\\u0432\\u0430\\u0435\\u0442",
+   "_icon": "icon:blueRestoreFlask",
+   "_count": "5",
+   "_maxStack": "5",
+   "_infinite": "0"
+  },
+  "guid": "457ab152032c47878b9c0a135179a1a8"
+ },
+ {
+  "file": "Consumables/BlueRestoreVial.asset",
+  "id": "",
+  "title": "Малый флакон интеллекта",
+  "description": "Восстанавливает 3 блока интеллекта",
+  "icon": "icon:blueRestoreVial",
+  "prefab": null,
+  "ability": {
+   "type": 2.0,
+   "cooldown": 2.0,
+   "staminaCost": 0.0,
+   "manaCost": 0.0,
+   "range": 3.0,
+   "damageMin": 1.0,
+   "damageMax": 3.0,
+   "effectGuids": [
+    "b29eba48165f15df98cb4572e833b130"
+   ]
+  },
+  "raw": {
+   "_title": "\"\\u041C\\u0430\\u043B\\u044B\\u0439 \\u0444\\u043B\\u0430\\u043A\\u043E\\u043D \\u0438\\u043D\\u0442\\u0435\\u043B\\u043B\\u0435\\u043A\\u0442\\u0430\"",
+   "_description": "\"\\u0412\\u043E\\u0441\\u0441\\u0442\\u0430\\u043D\\u0430\\u0432\\u043B\\u0438\\u0432\\u0430\\u0435\\u0442",
+   "_icon": "icon:blueRestoreVial",
+   "_count": "5",
+   "_maxStack": "5",
+   "_infinite": "0"
+  },
+  "guid": "9933a6cc68be28e0a9f5c57c26a6f32a"
+ },
+ {
+  "file": "Consumables/GreenRestoreFlask.asset",
+  "id": "",
+  "title": "Большой флакон выносливости",
+  "description": "Восстанавливает 6 блоков выносливости",
+  "icon": "icon:greenRestoreFlask",
+  "prefab": null,
+  "ability": {
+   "type": 2.0,
+   "cooldown": 2.0,
+   "staminaCost": 0.0,
+   "manaCost": 0.0,
+   "range": 3.0,
+   "damageMin": 1.0,
+   "damageMax": 3.0,
+   "effectGuids": [
+    "fc4bfebc1d180599c38cce62ad3a8be2"
+   ]
+  },
+  "raw": {
+   "_title": "\"\\u0411\\u043E\\u043B\\u044C\\u0448\\u043E\\u0439 \\u0444\\u043B\\u0430\\u043A\\u043E\\u043D",
+   "_description": "\"\\u0412\\u043E\\u0441\\u0441\\u0442\\u0430\\u043D\\u0430\\u0432\\u043B\\u0438\\u0432\\u0430\\u0435\\u0442",
+   "_icon": "icon:greenRestoreFlask",
+   "_count": "5",
+   "_maxStack": "5",
+   "_infinite": "0"
+  },
+  "guid": "4fbb98ef6ae3d9888d2e3eeda6e526a0"
+ },
+ {
+  "file": "Consumables/GreenRestoreVial.asset",
+  "id": "",
+  "title": "Малый флакон выносливости",
+  "description": "Восстанавливает 3 блока выносливости",
+  "icon": "icon:greenRestoreVial",
+  "prefab": null,
+  "ability": {
+   "type": 2.0,
+   "cooldown": 2.0,
+   "staminaCost": 0.0,
+   "manaCost": 0.0,
+   "range": 3.0,
+   "damageMin": 1.0,
+   "damageMax": 3.0,
+   "effectGuids": [
+    "fe9d1c4fea03523c71df3469b9823247"
+   ]
+  },
+  "raw": {
+   "_title": "\"\\u041C\\u0430\\u043B\\u044B\\u0439 \\u0444\\u043B\\u0430\\u043A\\u043E\\u043D \\u0432\\u044B\\u043D\\u043E\\u0441\\u043B\\u0438\\u0432\\u043E\\u0441\\u0442\\u0438\"",
+   "_description": "\"\\u0412\\u043E\\u0441\\u0441\\u0442\\u0430\\u043D\\u0430\\u0432\\u043B\\u0438\\u0432\\u0430\\u0435\\u0442",
+   "_icon": "icon:greenRestoreVial",
+   "_count": "5",
+   "_maxStack": "5",
+   "_infinite": "0"
+  },
+  "guid": "4bfec34010b3bfa74a268bd0aff5636b"
+ },
+ {
+  "file": "Consumables/OrangeRestoreFlask.asset",
+  "id": "",
+  "title": "Большой флакон удачи",
+  "description": "Восстанавливает 6 блоков удачи",
+  "icon": "icon:orangeRestoreFlask",
+  "prefab": null,
+  "ability": {
+   "type": 2.0,
+   "cooldown": 2.0,
+   "staminaCost": 0.0,
+   "manaCost": 0.0,
+   "range": 3.0,
+   "damageMin": 1.0,
+   "damageMax": 3.0,
+   "effectGuids": [
+    "727e203cd770187ff0d31103cca2c72e"
+   ]
+  },
+  "raw": {
+   "_title": "\"\\u0411\\u043E\\u043B\\u044C\\u0448\\u043E\\u0439 \\u0444\\u043B\\u0430\\u043A\\u043E\\u043D",
+   "_description": "\"\\u0412\\u043E\\u0441\\u0441\\u0442\\u0430\\u043D\\u0430\\u0432\\u043B\\u0438\\u0432\\u0430\\u0435\\u0442",
+   "_icon": "icon:orangeRestoreFlask",
+   "_count": "5",
+   "_maxStack": "5",
+   "_infinite": "0"
+  },
+  "guid": "b3960da4db3cb3c4d67733726354c030"
+ },
+ {
+  "file": "Consumables/OrangeRestoreVial.asset",
+  "id": "",
+  "title": "Малый флакон удачи",
+  "description": "Восстанавливает 3 блока удачи",
+  "icon": "icon:orangeRestoreVial",
+  "prefab": null,
+  "ability": {
+   "type": 2.0,
+   "cooldown": 2.0,
+   "staminaCost": 0.0,
+   "manaCost": 0.0,
+   "range": 3.0,
+   "damageMin": 1.0,
+   "damageMax": 3.0,
+   "effectGuids": [
+    "76c57060d202a63aafa5fefeda0f5962"
+   ]
+  },
+  "raw": {
+   "_title": "\"\\u041C\\u0430\\u043B\\u044B\\u0439 \\u0444\\u043B\\u0430\\u043A\\u043E\\u043D \\u0443\\u0434\\u0430\\u0447\\u0438\"",
+   "_description": "\"\\u0412\\u043E\\u0441\\u0441\\u0442\\u0430\\u043D\\u0430\\u0432\\u043B\\u0438\\u0432\\u0430\\u0435\\u0442",
+   "_icon": "icon:orangeRestoreVial",
+   "_count": "5",
+   "_maxStack": "5",
+   "_infinite": "0"
+  },
+  "guid": "8e424402ed0232686f3f5b289d6af223"
+ },
+ {
+  "file": "Consumables/RedRestoreFlask.asset",
+  "id": "",
+  "title": "Большой флакон силы",
+  "description": "Восстанавливает 6 блоков силы",
+  "icon": "icon:redRestoreFlask",
+  "prefab": null,
+  "ability": {
+   "type": 2.0,
+   "cooldown": 2.0,
+   "staminaCost": 0.0,
+   "manaCost": 0.0,
+   "range": 3.0,
+   "damageMin": 1.0,
+   "damageMax": 3.0,
+   "effectGuids": [
+    "8023971876265e15c4e078d0bda9361c"
+   ]
+  },
+  "raw": {
+   "_title": "\"\\u0411\\u043E\\u043B\\u044C\\u0448\\u043E\\u0439 \\u0444\\u043B\\u0430\\u043A\\u043E\\u043D",
+   "_description": "\"\\u0412\\u043E\\u0441\\u0441\\u0442\\u0430\\u043D\\u0430\\u0432\\u043B\\u0438\\u0432\\u0430\\u0435\\u0442",
+   "_icon": "icon:redRestoreFlask",
+   "_count": "5",
+   "_maxStack": "5",
+   "_infinite": "0"
+  },
+  "guid": "e545808d50abae491aeefe204c4310b3"
+ },
+ {
+  "file": "Consumables/RedRestoreVial.asset",
+  "id": "",
+  "title": "Малый флакон силы",
+  "description": "Восстанавливает 3 блока силы",
+  "icon": "icon:redRestoreVial",
+  "prefab": null,
+  "ability": {
+   "type": 2.0,
+   "cooldown": 2.0,
+   "staminaCost": 0.0,
+   "manaCost": 0.0,
+   "range": 3.0,
+   "damageMin": 1.0,
+   "damageMax": 3.0,
+   "effectGuids": [
+    "b91ca62530221a8ef40ac4bacf0991bc"
+   ]
+  },
+  "raw": {
+   "_title": "\"\\u041C\\u0430\\u043B\\u044B\\u0439 \\u0444\\u043B\\u0430\\u043A\\u043E\\u043D \\u0441\\u0438\\u043B\\u044B\"",
+   "_description": "\"\\u0412\\u043E\\u0441\\u0441\\u0442\\u0430\\u043D\\u0430\\u0432\\u043B\\u0438\\u0432\\u0430\\u0435\\u0442",
+   "_icon": "icon:redRestoreVial",
+   "_count": "5",
+   "_maxStack": "5",
+   "_infinite": "0"
+  },
+  "guid": "fb4fe410ca309c916960836d10ba489b"
+ },
+ {
+  "file": "Consumables/YellowRestoreFlask.asset",
+  "id": "",
+  "title": "Большой флакон ловкости",
+  "description": "Восстанавливает 6 блоков ловкости",
+  "icon": "icon:yellowRestoreFlask",
+  "prefab": null,
+  "ability": {
+   "type": 2.0,
+   "cooldown": 2.0,
+   "staminaCost": 0.0,
+   "manaCost": 0.0,
+   "range": 3.0,
+   "damageMin": 1.0,
+   "damageMax": 3.0,
+   "effectGuids": [
+    "5d5b50dec5d4eedc9368c184d11270b2"
+   ]
+  },
+  "raw": {
+   "_title": "\"\\u0411\\u043E\\u043B\\u044C\\u0448\\u043E\\u0439 \\u0444\\u043B\\u0430\\u043A\\u043E\\u043D",
+   "_description": "\"\\u0412\\u043E\\u0441\\u0441\\u0442\\u0430\\u043D\\u0430\\u0432\\u043B\\u0438\\u0432\\u0430\\u0435\\u0442",
+   "_icon": "icon:yellowRestoreFlask",
+   "_count": "5",
+   "_maxStack": "5",
+   "_infinite": "0"
+  },
+  "guid": "2ecd8f73e669441ee78c3e1f56bcaa68"
+ },
+ {
+  "file": "Consumables/YellowRestoreVial.asset",
+  "id": "",
+  "title": "Малый флакон ловкости",
+  "description": "Восстанавливает 3 блока ловкости",
+  "icon": "icon:yellowRestoreVial",
+  "prefab": null,
+  "ability": {
+   "type": 2.0,
+   "cooldown": 2.0,
+   "staminaCost": 0.0,
+   "manaCost": 0.0,
+   "range": 3.0,
+   "damageMin": 1.0,
+   "damageMax": 3.0,
+   "effectGuids": [
+    "a78ecce3529fbd613dc88a23ba97b821"
+   ]
+  },
+  "raw": {
+   "_title": "\"\\u041C\\u0430\\u043B\\u044B\\u0439 \\u0444\\u043B\\u0430\\u043A\\u043E\\u043D \\u043B\\u043E\\u0432\\u043A\\u043E\\u0441\\u0442\\u0438\"",
+   "_description": "\"\\u0412\\u043E\\u0441\\u0441\\u0442\\u0430\\u043D\\u0430\\u0432\\u043B\\u0438\\u0432\\u0430\\u0435\\u0442",
+   "_icon": "icon:yellowRestoreVial",
+   "_count": "5",
+   "_maxStack": "5",
+   "_infinite": "0"
+  },
+  "guid": "5166d3424462c326f64d41f12ae02009"
+ },
+ {
+  "file": "Effects/FireDamageEffect.asset",
+  "id": "burnEffect",
+  "title": "Эфект горения",
+  "description": "Куб получает периодический урон огнем \\n 30% шанс распространить эфект на соседние кубы",
+  "icon": "icon:fireGem",
+  "prefab": null,
+  "kind": 1,
+  "effectGuids": [],
+  "raw": {
+   "_kind": "1",
+   "_id": "burnEffect",
+   "_title": "\"\\u042D\\u0444\\u0435\\u043A\\u0442 \\u0433\\u043E\\u0440\\u0435\\u043D\\u0438\\u044F\"",
+   "_description": "\"\\u041A\\u0443\\u0431 \\u043F\\u043E\\u043B\\u0443\\u0447\\u0430\\u0435\\u0442 \\u043F\\u0435\\u0440\\u0438\\u043E\\u0434\\u0438\\u0447\\u0435\\u0441\\u043A\\u0438\\u0439 \\u0443\\u0440\\u043E\\u043D \\u043E\\u0433\\u043D\\u0435\\u043C \\\\n 30% \\u0448\\u0430\\u043D\\u0441 \\u0440\\u0430\\u0441\\u043F\\u0440\\u043E\\u0441\\u0442\\u0440\\u0430\\u043D\\u0438\\u0442\\u044C \\u044D\\u0444\\u0435\\u043A\\u0442 \\u043D\\u0430 \\u0441\\u043E\\u0441\\u0435\\u0434\\u043D\\u0438\\u0435 \\u043A\\u0443\\u0431\\u044B\"",
+   "_icon": "icon:fireGem",
+   "_isInstant": "0",
+   "_duration": "3",
+   "_interval": "1",
+   "_damagePerTick": "6",
+   "_spreadChance": "0.3",
+   "_statModifier": "0",
+   "_stat": "1",
+   "_multiplier": "0.5",
+   "_restoreAnyBlockType": "1",
+   "_restoreBlockType": "0",
+   "_restoreAmount": "1"
+  },
+  "guid": "38b9db6fc3620d742a1ff002c807e96b"
+ },
+ {
+  "file": "Effects/LightningEffect.asset",
+  "id": "burnEffect",
+  "title": "Эфект горения",
+  "description": "Куб получает периодический урон огнем \\n 30% шанс распространить эфект на соседние кубы",
+  "icon": "icon:fireGem",
+  "prefab": null,
+  "kind": 1,
+  "effectGuids": [],
+  "raw": {
+   "_kind": "1",
+   "_id": "burnEffect",
+   "_title": "\"\\u042D\\u0444\\u0435\\u043A\\u0442 \\u0433\\u043E\\u0440\\u0435\\u043D\\u0438\\u044F\"",
+   "_description": "\"\\u041A\\u0443\\u0431 \\u043F\\u043E\\u043B\\u0443\\u0447\\u0430\\u0435\\u0442 \\u043F\\u0435\\u0440\\u0438\\u043E\\u0434\\u0438\\u0447\\u0435\\u0441\\u043A\\u0438\\u0439 \\u0443\\u0440\\u043E\\u043D \\u043E\\u0433\\u043D\\u0435\\u043C \\\\n 30% \\u0448\\u0430\\u043D\\u0441 \\u0440\\u0430\\u0441\\u043F\\u0440\\u043E\\u0441\\u0442\\u0440\\u0430\\u043D\\u0438\\u0442\\u044C \\u044D\\u0444\\u0435\\u043A\\u0442 \\u043D\\u0430 \\u0441\\u043E\\u0441\\u0435\\u0434\\u043D\\u0438\\u0435 \\u043A\\u0443\\u0431\\u044B\"",
+   "_icon": "icon:fireGem",
+   "_isInstant": "0",
+   "_duration": "3",
+   "_interval": "1",
+   "_damagePerTick": "4",
+   "_spreadChance": "0.3",
+   "_stat": "1",
+   "_multiplier": "0.5",
+   "_restoreAnyBlockType": "1",
+   "_restoreBlockType": "0",
+   "_restoreAmount": "1"
+  },
+  "guid": "10a6028841e1a6a42b2dd1f84a600ce6"
+ },
+ {
+  "file": "Effects/MagicShieldEffect.asset",
+  "id": "magic-shield",
+  "title": "Магический щит",
+  "description": "Магический щит",
+  "icon": "icon:magicShieldArtifact",
+  "prefab": null,
+  "kind": 2,
+  "effectGuids": [],
+  "raw": {
+   "_kind": "2",
+   "_id": "magic-shield",
+   "_title": "\"\\u041C\\u0430\\u0433\\u0438\\u0447\\u0435\\u0441\\u043A\\u0438\\u0439 \\u0449\\u0438\\u0442\"",
+   "_description": "\"\\u041C\\u0430\\u0433\\u0438\\u0447\\u0435\\u0441\\u043A\\u0438\\u0439 \\u0449\\u0438\\u0442\"",
+   "_icon": "icon:magicShieldArtifact",
+   "_isInstant": "0",
+   "_duration": "1",
+   "_interval": "1",
+   "_damagePerTick": "1",
+   "_spreadChance": "0",
+   "_stat": "1",
+   "_multiplier": "0.5",
+   "_restoreAnyBlockType": "1",
+   "_restoreBlockType": "0",
+   "_restoreAmount": "1"
+  },
+  "guid": "d3fde9348733a8345a5c5a0867dded4e"
+ },
+ {
+  "file": "Effects/PoisonDamageEffect.asset",
+  "id": "poisonEffect",
+  "title": "Эфект яда",
+  "description": "Куб получает периодический урон ядом \\n Снижает эфективность отравленного куба на 30%",
+  "icon": "icon:poisonGem",
+  "prefab": null,
+  "kind": 0,
+  "effectGuids": [],
+  "raw": {
+   "_kind": "0",
+   "_id": "poisonEffect",
+   "_title": "\"\\u042D\\u0444\\u0435\\u043A\\u0442 \\u044F\\u0434\\u0430\"",
+   "_description": "\"\\u041A\\u0443\\u0431 \\u043F\\u043E\\u043B\\u0443\\u0447\\u0430\\u0435\\u0442 \\u043F\\u0435\\u0440\\u0438\\u043E\\u0434\\u0438\\u0447\\u0435\\u0441\\u043A\\u0438\\u0439 \\u0443\\u0440\\u043E\\u043D \\u044F\\u0434\\u043E\\u043C \\\\n \\u0421\\u043D\\u0438\\u0436\\u0430\\u0435\\u0442 \\u044D\\u0444\\u0435\\u043A\\u0442\\u0438\\u0432\\u043D\\u043E\\u0441\\u0442\\u044C \\u043E\\u0442\\u0440\\u0430\\u0432\\u043B\\u0435\\u043D\\u043D\\u043E\\u0433\\u043E \\u043A\\u0443\\u0431\\u0430 \\u043D\\u0430 30%\"",
+   "_icon": "icon:poisonGem",
+   "_isInstant": "0",
+   "_duration": "5",
+   "_interval": "1",
+   "_damagePerTick": "2",
+   "_spreadChance": "0.3",
+   "_statModifier": "0.3",
+   "_stat": "1",
+   "_multiplier": "0.5",
+   "_restoreAnyBlockType": "1",
+   "_restoreBlockType": "0",
+   "_restoreAmount": "1"
+  },
+  "guid": "2a88bc30443e53e44b0d2a1a072ea384"
+ },
+ {
+  "file": "Equipment/Artifacts/MagicShieldArtifact.asset",
+  "id": "magic-shield-artifact",
+  "title": "Артефакт магического щита",
+  "description": "Артефакт магического щита",
+  "icon": "icon:magicShieldArtifact",
+  "prefab": "prefab:magicShieldArtifact",
+  "kind": 1,
+  "equipSlotType": 1,
+  "scalingStat": 3,
+  "itemLevel": 1,
+  "minItemLevel": 1,
+  "minStatRequired": 0,
+  "gemSlotsCount": 0,
+  "ability": {
+   "type": 2.0,
+   "cooldown": 1.0,
+   "staminaCost": 0.0,
+   "manaCost": 3.0,
+   "range": 3.0,
+   "damageMin": 1.0,
+   "damageMax": 3.0,
+   "effectGuids": [
+    "d3fde9348733a8345a5c5a0867dded4e"
+   ]
+  },
+  "raw": {
+   "_kind": "1",
+   "_id": "magic-shield-artifact",
+   "_title": "\"\\u0410\\u0440\\u0442\\u0435\\u0444\\u0430\\u043A\\u0442 \\u043C\\u0430\\u0433\\u0438\\u0447\\u0435\\u0441\\u043A\\u043E\\u0433\\u043E",
+   "_description": "\"\\u0410\\u0440\\u0442\\u0435\\u0444\\u0430\\u043A\\u0442 \\u043C\\u0430\\u0433\\u0438\\u0447\\u0435\\u0441\\u043A\\u043E\\u0433\\u043E",
+   "_icon": "icon:magicShieldArtifact",
+   "_prefab": "prefab:magicShieldArtifact",
+   "_animation": "animation:sword",
+   "_equipSlotType": "1",
+   "_scalingStat": "3",
+   "_itemLevel": "1",
+   "_minItemLevel": "1",
+   "_minStatRequired": "0",
+   "_gemSlotsCount": "0",
+   "_baseline": "{fileID: 0}"
+  },
+  "guid": "6f33549d7da324d4f9aa42f292c9e089"
+ },
+ {
+  "file": "Equipment/Gems/FireGem.asset",
+  "id": "firegem",
+  "title": "Камень огня",
+  "description": "Накладывает эффект горения",
+  "icon": "icon:fireGem",
+  "prefab": null,
+  "effectGuids": [
+   "38b9db6fc3620d742a1ff002c807e96b"
+  ],
+  "raw": {
+   "_baseline": "{fileID: 0}",
+   "_id": "firegem",
+   "_title": "\"\\u041A\\u0430\\u043C\\u0435\\u043D\\u044C \\u043E\\u0433\\u043D\\u044F\"",
+   "_description": "\"\\u041D\\u0430\\u043A\\u043B\\u0430\\u0434\\u044B\\u0432\\u0430\\u0435\\u0442 \\u044D\\u0444\\u0444\\u0435\\u043A\\u0442 \\u0433\\u043E\\u0440\\u0435\\u043D\\u0438\\u044F\"",
+   "_icon": "icon:fireGem"
+  },
+  "guid": "5b0062d7de2ef1244a591fd564cd0100"
+ },
+ {
+  "file": "Equipment/Gems/LightningGem.asset",
+  "id": "lightningGem",
+  "title": "Камень молнии",
+  "description": "Накладывает эффект электричества",
+  "icon": "icon:lightningGem",
+  "prefab": null,
+  "effectGuids": [],
+  "raw": {
+   "_baseline": "{fileID: 0}",
+   "_id": "lightningGem",
+   "_title": "\"\\u041A\\u0430\\u043C\\u0435\\u043D\\u044C \\u043C\\u043E\\u043B\\u043D\\u0438\\u0438\"",
+   "_description": "\"\\u041D\\u0430\\u043A\\u043B\\u0430\\u0434\\u044B\\u0432\\u0430\\u0435\\u0442 \\u044D\\u0444\\u0444\\u0435\\u043A\\u0442 \\u044D\\u043B\\u0435\\u043A\\u0442\\u0440\\u0438\\u0447\\u0435\\u0441\\u0442\\u0432\\u0430\"",
+   "_icon": "icon:lightningGem"
+  },
+  "guid": "1f2eed68faf80b14195c8e7d655188b1"
+ },
+ {
+  "file": "Equipment/Gems/PoisonGem.asset",
+  "id": "poisonGem",
+  "title": "Камень яда",
+  "description": "Накладывает эффект яда",
+  "icon": "icon:poisonGem",
+  "prefab": null,
+  "effectGuids": [
+   "2a88bc30443e53e44b0d2a1a072ea384"
+  ],
+  "raw": {
+   "_baseline": "{fileID: 0}",
+   "_id": "poisonGem",
+   "_title": "\"\\u041A\\u0430\\u043C\\u0435\\u043D\\u044C \\u044F\\u0434\\u0430\"",
+   "_description": "\"\\u041D\\u0430\\u043A\\u043B\\u0430\\u0434\\u044B\\u0432\\u0430\\u0435\\u0442 \\u044D\\u0444\\u0444\\u0435\\u043A\\u0442 \\u044F\\u0434\\u0430\"",
+   "_icon": "icon:poisonGem"
+  },
+  "guid": "95f2f1e614825184aa069e13bfb27778"
+ },
+ {
+  "file": "Equipment/Weapon/RustyAxe.asset",
+  "id": "rustyAxe",
+  "title": "Ржавый топор",
+  "description": "Ржавый топор",
+  "icon": "icon:axe",
+  "prefab": "prefab:axe",
+  "kind": 0,
+  "equipSlotType": 0,
+  "scalingStat": 1,
+  "itemLevel": 1,
+  "minItemLevel": 1,
+  "minStatRequired": 5,
+  "gemSlotsCount": 0,
+  "ability": {
+   "type": 0.0,
+   "cooldown": 3.0,
+   "staminaCost": 4.0,
+   "manaCost": 0.0,
+   "range": 1.0,
+   "damageMin": 25.0,
+   "damageMax": 35.0,
+   "effectGuids": []
+  },
+  "raw": {
+   "_kind": "0",
+   "_id": "rustyAxe",
+   "_title": "\"\\u0420\\u0436\\u0430\\u0432\\u044B\\u0439 \\u0442\\u043E\\u043F\\u043E\\u0440\"",
+   "_description": "\"\\u0420\\u0436\\u0430\\u0432\\u044B\\u0439 \\u0442\\u043E\\u043F\\u043E\\u0440\"",
+   "_icon": "icon:axe",
+   "_prefab": "prefab:axe",
+   "_animation": "animation:sword",
+   "_equipSlotType": "0",
+   "_scalingStat": "1",
+   "_itemLevel": "1",
+   "_minItemLevel": "1",
+   "_minStatRequired": "5",
+   "_gemSlotsCount": "0",
+   "_baseline": "{fileID: 0}"
+  },
+  "guid": "31a03f2b05def6878b1b0d4b433be8c2"
+ },
+ {
+  "file": "Equipment/Weapon/RustyClub.asset",
+  "id": "rustyClub",
+  "title": "Ржавая булава",
+  "description": "Ржавая булава",
+  "icon": "icon:club",
+  "prefab": "prefab:club",
+  "kind": 0,
+  "equipSlotType": 0,
+  "scalingStat": 1,
+  "itemLevel": 1,
+  "minItemLevel": 1,
+  "minStatRequired": 5,
+  "gemSlotsCount": 0,
+  "ability": {
+   "type": 0.0,
+   "cooldown": 4.0,
+   "staminaCost": 4.0,
+   "manaCost": 0.0,
+   "range": 1.0,
+   "damageMin": 35.0,
+   "damageMax": 45.0,
+   "effectGuids": []
+  },
+  "raw": {
+   "_kind": "0",
+   "_id": "rustyClub",
+   "_title": "\"\\u0420\\u0436\\u0430\\u0432\\u0430\\u044F \\u0431\\u0443\\u043B\\u0430\\u0432\\u0430\"",
+   "_description": "\"\\u0420\\u0436\\u0430\\u0432\\u0430\\u044F \\u0431\\u0443\\u043B\\u0430\\u0432\\u0430\"",
+   "_icon": "icon:club",
+   "_prefab": "prefab:club",
+   "_animation": "animation:sword",
+   "_equipSlotType": "0",
+   "_scalingStat": "1",
+   "_itemLevel": "1",
+   "_minItemLevel": "1",
+   "_minStatRequired": "5",
+   "_gemSlotsCount": "0",
+   "_baseline": "{fileID: 0}"
+  },
+  "guid": "f9b3027ab1db7250c6658975f3f8cd44"
+ },
+ {
+  "file": "Equipment/Weapon/RustyDagger.asset",
+  "id": "rustyDagger",
+  "title": "Ржавый кинжал",
+  "description": "Ржавый кинжал",
+  "icon": "icon:dagger",
+  "prefab": "prefab:dagger",
+  "kind": 0,
+  "equipSlotType": 0,
+  "scalingStat": 2,
+  "itemLevel": 1,
+  "minItemLevel": 1,
+  "minStatRequired": 5,
+  "gemSlotsCount": 0,
+  "ability": {
+   "type": 0.0,
+   "cooldown": 1.0,
+   "staminaCost": 3.0,
+   "manaCost": 0.0,
+   "range": 0.5,
+   "damageMin": 8.0,
+   "damageMax": 12.0,
+   "effectGuids": []
+  },
+  "raw": {
+   "_kind": "0",
+   "_id": "rustyDagger",
+   "_title": "\"\\u0420\\u0436\\u0430\\u0432\\u044B\\u0439 \\u043A\\u0438\\u043D\\u0436\\u0430\\u043B\"",
+   "_description": "\"\\u0420\\u0436\\u0430\\u0432\\u044B\\u0439 \\u043A\\u0438\\u043D\\u0436\\u0430\\u043B\"",
+   "_icon": "icon:dagger",
+   "_prefab": "prefab:dagger",
+   "_animation": "animation:dagger",
+   "_equipSlotType": "0",
+   "_scalingStat": "2",
+   "_itemLevel": "1",
+   "_minItemLevel": "1",
+   "_minStatRequired": "5",
+   "_gemSlotsCount": "0",
+   "_baseline": "{fileID: 0}"
+  },
+  "guid": "3d8601a989a79cb4d9ed1e5947e2c5fa"
+ },
+ {
+  "file": "Equipment/Weapon/RustyHammer.asset",
+  "id": "rustyHammer",
+  "title": "Ржавый молот",
+  "description": "Ржавый молот",
+  "icon": "icon:hammer",
+  "prefab": "prefab:hammer",
+  "kind": 0,
+  "equipSlotType": 0,
+  "scalingStat": 1,
+  "itemLevel": 1,
+  "minItemLevel": 1,
+  "minStatRequired": 5,
+  "gemSlotsCount": 0,
+  "ability": {
+   "type": 0.0,
+   "cooldown": 5.0,
+   "staminaCost": 6.0,
+   "manaCost": 0.0,
+   "range": 1.0,
+   "damageMin": 50.0,
+   "damageMax": 65.0,
+   "effectGuids": []
+  },
+  "raw": {
+   "_kind": "0",
+   "_id": "rustyHammer",
+   "_title": "\"\\u0420\\u0436\\u0430\\u0432\\u044B\\u0439 \\u043C\\u043E\\u043B\\u043E\\u0442\"",
+   "_description": "\"\\u0420\\u0436\\u0430\\u0432\\u044B\\u0439 \\u043C\\u043E\\u043B\\u043E\\u0442\"",
+   "_icon": "icon:hammer",
+   "_prefab": "prefab:hammer",
+   "_animation": "animation:sword",
+   "_equipSlotType": "0",
+   "_scalingStat": "1",
+   "_itemLevel": "1",
+   "_minItemLevel": "1",
+   "_minStatRequired": "5",
+   "_gemSlotsCount": "0",
+   "_baseline": "{fileID: 0}"
+  },
+  "guid": "637f2e4fbe8da69d746f63ec18533498"
+ },
+ {
+  "file": "Equipment/Weapon/RustySpear.asset",
+  "id": "rustySpear",
+  "title": "Ржавое копье",
+  "description": "Ржавое копье",
+  "icon": "icon:spear",
+  "prefab": "prefab:spear",
+  "kind": 0,
+  "equipSlotType": 0,
+  "scalingStat": 2,
+  "itemLevel": 1,
+  "minItemLevel": 1,
+  "minStatRequired": 5,
+  "gemSlotsCount": 0,
+  "ability": {
+   "type": 0.0,
+   "cooldown": 2.0,
+   "staminaCost": 5.0,
+   "manaCost": 0.0,
+   "range": 2.0,
+   "damageMin": 20.0,
+   "damageMax": 30.0,
+   "effectGuids": []
+  },
+  "raw": {
+   "_kind": "0",
+   "_id": "rustySpear",
+   "_title": "\"\\u0420\\u0436\\u0430\\u0432\\u043E\\u0435 \\u043A\\u043E\\u043F\\u044C\\u0435\"",
+   "_description": "\"\\u0420\\u0436\\u0430\\u0432\\u043E\\u0435 \\u043A\\u043E\\u043F\\u044C\\u0435\"",
+   "_icon": "icon:spear",
+   "_prefab": "prefab:spear",
+   "_animation": "animation:sword",
+   "_equipSlotType": "0",
+   "_scalingStat": "2",
+   "_itemLevel": "1",
+   "_minItemLevel": "1",
+   "_minStatRequired": "5",
+   "_gemSlotsCount": "0",
+   "_baseline": "{fileID: 0}"
+  },
+  "guid": "aa2b838cd0b477b44408775f90aa2a02"
+ },
+ {
+  "file": "Equipment/Weapon/RustySword.asset",
+  "id": "rustySword",
+  "title": "Ржавый меч",
+  "description": "Ржавый меч",
+  "icon": "icon:sword",
+  "prefab": "prefab:sword",
+  "kind": 0,
+  "equipSlotType": 0,
+  "scalingStat": 2,
+  "itemLevel": 1,
+  "minItemLevel": 1,
+  "minStatRequired": 5,
+  "gemSlotsCount": 0,
+  "ability": {
+   "type": 0.0,
+   "cooldown": 2.0,
+   "staminaCost": 3.0,
+   "manaCost": 0.0,
+   "range": 1.0,
+   "damageMin": 15.0,
+   "damageMax": 25.0,
+   "effectGuids": []
+  },
+  "raw": {
+   "_kind": "0",
+   "_id": "rustySword",
+   "_title": "\"\\u0420\\u0436\\u0430\\u0432\\u044B\\u0439 \\u043C\\u0435\\u0447\"",
+   "_description": "\"\\u0420\\u0436\\u0430\\u0432\\u044B\\u0439 \\u043C\\u0435\\u0447\"",
+   "_icon": "icon:sword",
+   "_prefab": "prefab:sword",
+   "_animation": "animation:sword",
+   "_equipSlotType": "0",
+   "_scalingStat": "2",
+   "_itemLevel": "1",
+   "_minItemLevel": "1",
+   "_minStatRequired": "5",
+   "_gemSlotsCount": "0",
+   "_baseline": "{fileID: 0}"
+  },
+  "guid": "796760e2e24493b773304677556271b0"
+ }
+]
