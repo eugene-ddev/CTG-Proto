@@ -1,4 +1,6 @@
-import { fighterInputOf } from '../core/fight';
+import { fighterInputOf, fightSetup } from '../core/fight';
+import { ratingDeltas } from '../core/rating';
+import { lossRule } from '../core/arena';
 import Phaser from 'phaser';
 import { BaseScene } from './BaseScene';
 import { SCENE, type BattleSceneData, type OpponentSceneData } from './keys';
@@ -14,7 +16,7 @@ import { hintIcon } from '../ui/HintIcon';
 import { weaponRow } from '../ui/WeaponRow';
 import { THRESHOLDS, createFighter, critOf, cubesToDisable, digPreview, dodgeOf, hasAliveCube, normalizeTarget, perkOf, slotDamageValue, type Fighter } from '../core/battle';
 import { armorAbsorb, bagSlots, itemOf } from '../core/character';
-import { generateOpponent, playerWeaponLevel, type Opponent } from '../core/opponent';
+import { type Opponent } from '../core/opponent';
 import { randomSeed } from '../core/rng';
 import type { CharacterState } from '../core/state';
 import { store } from '../game/store';
@@ -26,7 +28,7 @@ import { COLOR, GAME_W, STAT_COLOR } from '../ui/theme';
 import { modelView, type ModelView } from '../ui/modelView';
 import { Modal } from '../ui/Modal';
 import { openRucksack } from '../ui/RucksackModal';
-import { SERIES_LENGTH, seriesRetries, retriesLeft, opponentDraws } from '../core/arena';
+import { SERIES_LENGTH, seriesRetries, retriesLeft } from '../core/arena';
 import { ARENA, getItem as itemById } from '../data/catalog';
 import { FACE_LEFT, FACE_RIGHT } from '../render/anim';
 
@@ -81,6 +83,8 @@ export class OpponentScene extends BaseScene {
 
   create() {
     const c = store.state.characters.find((x) => x.uid === this.charUid);
+    // серия с игроками без выбранного соперника — к списку соперников
+    if (c && store.state.arenaRun?.mode === 'players' && !store.state.arenaRun.opp) return void this.scene.start(SCENE.rivals);
     // противника выбирает сервер: пока ответа нет — экран ожидания, затем сцена открывается заново
     if (c && !store.state.arenaRun?.opp) {
       this.setupScreen({ title: 'Новый противник', kicker: 'Арена', back: null });
@@ -94,11 +98,12 @@ export class OpponentScene extends BaseScene {
       return;
     }
     const run = store.state.arenaRun;
+    const pvp = run?.opp?.player;
     // экран подготовки к бою — без табов главного меню: выход — кнопкой слева внизу
     this.setupScreen({
       title: 'Новый противник',
-      kicker: `Арена · бой ${run?.fight ?? 1} из ${SERIES_LENGTH} · повторов ${retriesLeft(run)}/${seriesRetries()}`,
-      subtitle: `${run?.wins ? `побед: ${run.wins} · ` : ''}за серию: ${ARENA.reward.cubes} куб. + ${[...new Set(ARENA.reward.drops.map((d) => `${itemById(d.itemId).kind === 'gem' ? 'камень стихии' : itemById(d.itemId).name.toLowerCase()} ${d.count[0] === d.count[1] ? d.count[0] : `${d.count[0]}–${d.count[1]}`}`))].join(' или ')}`,
+      kicker: pvp ? `Бой с игроком · бой ${run?.fight ?? 1} из ${SERIES_LENGTH} · без повторов` : `Арена · бой ${run?.fight ?? 1} из ${SERIES_LENGTH} · повторов ${retriesLeft(run)}/${seriesRetries()}`,
+      subtitle: `${pvp ? `рейтинг ${pvp.myRating} · победа +${ratingDeltas(pvp.myRating, pvp.rating).win} · поражение ${ratingDeltas(pvp.myRating, pvp.rating).lose} · ` : ''}${run?.wins ? `побед: ${run.wins} · ` : ''}за серию: ${ARENA.reward.cubes} куб. + ${[...new Set(ARENA.reward.drops.map((d) => `${itemById(d.itemId).kind === 'gem' ? 'камень стихии' : itemById(d.itemId).name.toLowerCase()} ${d.count[0] === d.count[1] ? d.count[0] : `${d.count[0]}–${d.count[1]}`}`))].join(' или ')}`,
       back: c && run ? null : SCENE.menu,
     });
     if (!c || !run) {
@@ -110,15 +115,15 @@ export class OpponentScene extends BaseScene {
     exit.addAt(this.add.image(-1, -2, TEX.arrowBackBrown).setScale(1.1), exit.getIndex(exit.hit));
     attachTooltip(exit.hit, () => ({ title: run.wins ? 'Забрать лут и выйти' : 'Выйти с арены', note: run.wins ? 'Серия закончится без награды; лут в рюкзаке остаётся у бойца.' : 'Серия закончится, боец вернётся в лобби.' }));
     const bp = getBlueprint(c.blueprintId) as CharacterBlueprint;
-    const opp = run.opp ?? { seed: this.oppSeed, level: playerWeaponLevel(playerFighterInput(c).equipment) };
-    this.oppSeed = opp.seed;
-    this.opp = generateOpponent(opp.seed, { level: opp.level, exactLevel: 'exact' in opp && !!opp.exact, category: bp.category, player: playerFighterInput(c), draws: opponentDraws(opp) });
+    // противник — из состояния (бот по зерну сервера или снимок бойца другого игрока)
+    this.opp = fightSetup(store.state)!.opp;
+    this.oppSeed = this.opp.seed;
     const enemy = createFighter('enemy', this.opp);
     const me = createFighter('player', playerFighterInput(c));
 
     // свой боец слева, противник справа — лицом друг к другу
     this.fighterCard(40, 'Твой боец', me, bp.name, c.equipment.map((e) => (e && hasItem(e.itemId) ? (itemOf(e) as EquipmentItem).itemLevel : null)));
-    const ec = this.fighterCard(650, 'Противник', enemy, this.opp.pattern, this.opp.weaponLevels);
+    const ec = this.fighterCard(650, pvp ? `Игрок ${pvp.name}` : 'Противник', enemy, this.opp.pattern, this.opp.weaponLevels);
     this.enemyView = ec.view;
     this.enemyF = enemy;
     this.highlight = null;
@@ -145,7 +150,7 @@ export class OpponentScene extends BaseScene {
       width: 60,
       height: 54,
       onClick: () => {
-        const m = openRucksack(this, c.uid, { note: 'Между боями: выпить зелье, сменить оружие. При поражении рюкзак и оружие в руках пропадают.' });
+        const m = openRucksack(this, c.uid, { note: lossRule(run.mode) === 'drop' ? 'Между боями: выпить зелье, сменить оружие. При поражении рюкзак и оружие в руках пропадают.' : 'Между боями: выпить зелье, сменить оружие.' });
         m.once(Phaser.GameObjects.Events.DESTROY, () => this.sys.isActive() && this.scene.restart({ charUid: c.uid, oppSeed: this.oppSeed, except: this.except } satisfies OpponentSceneData));
       },
     });

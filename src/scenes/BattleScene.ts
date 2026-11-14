@@ -1,6 +1,8 @@
 import Phaser from 'phaser';
 import { BaseScene } from './BaseScene';
 import { createRunBattle, resolveFight, type FightInputs } from '../core/fight';
+import { RATING_START } from '../core/rating';
+import { lossRule, type RivalInfo } from '../core/arena';
 import { SCENE, type BattleSceneData, type CharactersSceneData, type OpponentSceneData } from './keys';
 import { EFFECTS, getBlueprint, getItem, hasItem, itemModel, weaponStrike } from '../data/catalog';
 import { FACE_LEFT, FACE_RIGHT, attackStyleOf, type AttackStyle } from '../render/anim';
@@ -167,6 +169,8 @@ export class BattleScene extends BaseScene {
     return store.state.loot?.entries ?? [];
   }
   /** Сколько ходов сыграно и когда нажаты артефакты — ввод игрока, по которому сервер пересчитывает бой. */
+  private mode: 'bots' | 'players' = 'bots';
+  private rival?: RivalInfo;
   private steps = 0;
   private artifactUses: Array<{ after: number; slot: number }> = [];
   /** Последний удар был критом — его основной урон рисуется золотым. */
@@ -219,6 +223,9 @@ export class BattleScene extends BaseScene {
       return;
     }
     this.b = made.battle;
+    // вид серии и соперник-игрок — запоминаем до итога: после боя их в состоянии уже нет
+    this.mode = store.state.arenaRun?.mode ?? 'bots';
+    this.rival = store.state.arenaRun?.opp?.player;
     this.steps = 0;
     this.artifactUses = [];
     // ушли с экрана победы — незабранный лут пропадает
@@ -970,7 +977,7 @@ export class BattleScene extends BaseScene {
     });
     const w = m.card.innerW;
     const inSeries = !!store.state.arenaRun;
-    m.card.content.add(text(this, w / 2, 10, inSeries ? 'Серия закончится поражением —\nоружие в руках и рюкзак пропадут.' : 'Бой будет засчитан поражением.', { size: 16, align: 'center' }).setOrigin(0.5, 0));
+    m.card.content.add(text(this, w / 2, 10, inSeries && lossRule(this.mode) === 'drop' ? 'Серия закончится поражением —\nоружие в руках и рюкзак пропадут.' : inSeries ? 'Серия закончится поражением.' : 'Бой будет засчитан поражением.', { size: 16, align: 'center' }).setOrigin(0.5, 0));
     m.card.content.add(new Button(this, w / 2 - 105, 110, 'Остаться', { variant: 'beige', width: 190, height: 48, size: 20, onClick: () => m.close() }));
     m.card.content.add(
       new Button(this, w / 2 + 105, 110, 'Выйти', {
@@ -1049,7 +1056,9 @@ export class BattleScene extends BaseScene {
     const add = (o: Phaser.GameObjects.GameObject) => body.add(o);
     const p = this.b.player;
     add(text(this, w / 2, 0, win ? 'ПОБЕДА' : 'ПОРАЖЕНИЕ', { kind: 'display', size: 44, color: win ? COLOR.win : COLOR.lose }).setOrigin(0.5, 0));
-    add(text(this, w / 2, 56, `${reason} · ходов: ${this.b.turn} · кубы бойца: ${p.aliveBlocks}/${p.blocks.length}`, { size: 14, align: 'center' }).setOrigin(0.5, 0));
+    const pend = this.rival ? store.state.pvpPending : null;
+    const ratingNote = this.rival && pend ? ` · рейтинг ${pend.delta > 0 ? '+' : ''}${pend.delta} → ${store.state.rating ?? RATING_START}` : '';
+    add(text(this, w / 2, 56, `${reason} · ходов: ${this.b.turn} · кубы бойца: ${p.aliveBlocks}/${p.blocks.length}${ratingNote}`, { size: 14, align: 'center' }).setOrigin(0.5, 0));
     let y = 92;
     if (win && out) {
       if (out.reward) y = this.rewardSection(body, w, y, out.reward);
@@ -1065,11 +1074,13 @@ export class BattleScene extends BaseScene {
       if (!win && out?.retry) {
         const left = retriesLeft(store.state.arenaRun);
         lines.push(['Повтор', `Бой можно переиграть: тот же противник, боец вернётся как до боя, ничего не пропадёт. Осталось повторов: ${left} из ${seriesRetries()}.`]);
-        lines.push(['Сдаться', 'Серия закончится поражением: оружие в руках и рюкзак с содержимым пропадут.']);
+        lines.push(['Сдаться', lossRule(this.mode) === 'keep' ? 'Серия закончится поражением; оружие и рюкзак останутся у бойца.' : 'Серия закончится поражением: оружие в руках и рюкзак с содержимым пропадут.']);
       } else if (!win && out) {
         const names = out.lost.map((id) => (hasItem(id) ? getItem(id).name : id));
-        lines.push(['Потеряно', names.length ? names.join(', ') : 'ничего — оружия и рюкзака не было']);
-        if (!this.surrenderedRun) lines.push(['', `Повторы серии кончились (${seriesRetries()} из ${seriesRetries()}).`]);
+        const keep = lossRule(this.mode) === 'keep';
+        lines.push(['Потеряно', names.length ? names.join(', ') : keep ? 'ничего — в серии с ботами при поражении всё остаётся у бойца' : 'ничего — оружия и рюкзака не было']);
+        if (this.mode === 'players') lines.push(['', `Серия с игроками закончена: повторов в ней нет.${this.rival ? ` ${this.rival.name} получит награду за отбитое нападение.` : ''}`]);
+        else if (!this.surrenderedRun) lines.push(['', `Повторы серии кончились (${seriesRetries()} из ${seriesRetries()}).`]);
       } else lines.push(['', 'Бой вне серии — итог не сохраняется.']);
       for (const [k, v] of lines) {
         add(text(this, 0, y, k, { size: 14, weight: 700 }));
@@ -1108,7 +1119,7 @@ export class BattleScene extends BaseScene {
         }),
       );
       add(
-        new Button(this, w / 2 + 205, by, 'Следующий бой', {
+        new Button(this, w / 2 + 205, by, this.mode === 'players' ? 'Следующий соперник' : 'Следующий бой', {
           width: 190, height: 50, size: 18,
           onClick: () => this.go(SCENE.opponent, { charUid: this.data_.charUid } satisfies OpponentSceneData),
         }),

@@ -154,3 +154,50 @@ describe('аргументы действий', () => {
     expect(viaJson.loot!.entries).toHaveLength(won!.loot.length - 1);
   });
 });
+
+describe('серии двух видов', () => {
+  const fighter = () => {
+    let s = applyAction(fresh(), 'craft', [craftWaran], ctx)!;
+    s = applyAction(s, 'debugGiveAllItems', [], ctx)!;
+    const uid = s.characters[0].uid;
+    const inv = (id: string) => s.inventory.find((e) => e.itemId === id)!.uid;
+    s = applyAction(s, 'equip', [uid, 0, inv('rustySword')], ctx)!;
+    s = applyAction(s, 'equip', [uid, 'rucksack', inv('rucksack')], ctx)!;
+    return { s, uid };
+  };
+
+  it('серия с ботами: поражение без повторов ничего не отнимает (arena.json → loss.bots = keep)', () => {
+    const { s, uid } = fighter();
+    let run = applyAction(s, 'startRun', [uid], ctx)!;
+    expect(run.arenaRun?.mode).toBe('bots');
+    // сдаться на первом ходу, пока не кончатся повторы
+    for (let i = 0; i < 10 && run.arenaRun; i++) {
+      run = applyAction(run, 'startFight', [], ctx)!;
+      run = applyAction(run, 'finishFight', [{ stopAfter: 0 }], ctx)!;
+    }
+    expect(run.arenaRun).toBeNull();
+    expect(run.characters[0].equipment[0]?.itemId).toBe('rustySword');
+    expect(run.characters[0].rucksack?.itemId).toBe('rucksack');
+  });
+
+  it('серия с игроками: бой со снимком, рейтинг по Эло, поражение отнимает оружие и рюкзак', async () => {
+    const { startPvp, snapshotOf } = await import('../arena');
+    const { ratingDeltas } = await import('../rating');
+    const { s, uid } = fighter();
+    const rival = { userId: 'u2', name: 'Василий', rating: 1200, myRating: 1000, snapshot: snapshotOf(s.characters[0]) };
+    const run = startPvp(s, uid, rival, 5)!;
+    expect(run.arenaRun?.mode).toBe('players');
+    expect(applyAction(run, 'startRun', [uid], ctx)).toBeNull(); // бота в серию с игроками не подставить
+    const inFight = applyAction(run, 'startFight', [], ctx)!;
+    expect(applyAction(inFight, 'endRun', [], ctx)).toBeNull(); // из боя не выйти без итога
+    const lost = applyAction(inFight, 'finishFight', [{ stopAfter: 0 }], ctx)!;
+    const d = ratingDeltas(1000, 1200);
+    expect(d.win).toBeGreaterThan(-d.lose); // победа над сильным даёт больше, чем отнимает поражение от него
+    expect(lost.rating).toBe(1000 + d.lose);
+    expect(lost.pvp).toEqual({ wins: 0, losses: 1 });
+    expect(lost.pvpPending).toMatchObject({ opponentId: 'u2', win: false, delta: d.lose });
+    expect(lost.arenaRun).toBeNull();
+    expect(lost.characters[0].equipment[0]).toBeNull();
+    expect(lost.characters[0].rucksack).toBeNull();
+  });
+});

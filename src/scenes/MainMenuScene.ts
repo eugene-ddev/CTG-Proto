@@ -2,7 +2,7 @@ import { BaseScene } from './BaseScene';
 import type { CharacterState } from '../core/state';
 import { SERIES_LENGTH, activeCharacter, fullRegenIn } from '../core/arena';
 import { itemOf } from '../core/character';
-import { getBlueprint, hasBlueprint, itemModel } from '../data/catalog';
+import { getBlueprint, getItem, hasBlueprint, itemModel } from '../data/catalog';
 import type { CharacterBlueprint } from '../data/types';
 import { store } from '../game/store';
 import { SCENE, type OpponentSceneData } from './keys';
@@ -12,6 +12,8 @@ import { text } from '../ui/text';
 import { COLOR, GAME_W, GAME_H, STAT_COLOR } from '../ui/theme';
 import { modelView } from '../ui/modelView';
 import { net } from '../net/client';
+import { RATING_START } from '../core/rating';
+import { Modal } from '../ui/Modal';
 import { FACE_RIGHT } from '../render/anim';
 
 /** «3:05», «1:02:10». */
@@ -111,14 +113,42 @@ export class MainMenuScene extends BaseScene {
       text(this, cx, 574, `${k + 1} / ${chars.length}`, { size: 12, color: COLOR.lightQuiet }).setOrigin(0.5, 0);
     }
 
-    new Button(this, cx, 636, 'В бой', {
-      variant: 'brown', width: 320, height: 68, size: 38,
-      onClick: () => {
-        // активный боец сразу идёт к противнику; идёт серия — продолжаем её
-        if (run) return this.go(SCENE.opponent, { charUid: run.charUid } satisfies OpponentSceneData);
-        this.go(SCENE.opponent, { charUid: c.uid } satisfies OpponentSceneData);
-      },
+    // два вида серий: с ботами (при поражении всё остаётся) и с игроками (рейтинг; при поражении оружие и рюкзак пропадают).
+    // Идёт серия — одна кнопка «Продолжить».
+    if (run) {
+      new Button(this, cx, 636, run.mode === 'players' ? 'Продолжить · игроки' : 'Продолжить серию', {
+        variant: 'brown', width: 380, height: 68, size: 30,
+        onClick: () => this.go(SCENE.opponent, { charUid: run.charUid } satisfies OpponentSceneData),
+      });
+    } else {
+      new Button(this, cx - 170, 636, 'С ботами', {
+        variant: 'brown', width: 320, height: 68, size: 34,
+        onClick: () => this.go(SCENE.opponent, { charUid: c.uid } satisfies OpponentSceneData),
+      });
+      new Button(this, cx + 170, 636, 'С игроками', {
+        variant: 'brown', width: 320, height: 68, size: 34,
+        onClick: () => this.go(SCENE.rivals),
+      });
+    }
+    text(this, cx, 684, `рейтинг ${s.rating ?? RATING_START}${s.pvp ? ` · побед ${s.pvp.wins} · поражений ${s.pvp.losses}` : ''}`, { size: 13, color: COLOR.lightQuiet }).setOrigin(0.5, 0);
+    this.showInbox();
+  }
+
+  /** Журнал нападений: кто вызывал бойца, пока игрока не было. Показывается один раз. */
+  private showInbox() {
+    const inbox = store.state.inbox ?? [];
+    if (!inbox.length) return;
+    const shown = inbox.slice(-6).reverse();
+    const m = new Modal(this, { title: 'Пока тебя не было', width: 620, height: 200 + shown.length * 44, onClose: () => store.act('inboxClear') });
+    const w = m.card.innerW;
+    shown.forEach((e, k) => {
+      const y = 4 + k * 44;
+      const reward = e.reward ? ` · награда: ${e.reward.cubes} куб.${e.reward.items.map((i) => `, ${getItem(i.itemId).name.toLowerCase()} ×${i.count}`).join('')}` : '';
+      m.card.content.add(text(this, 0, y, `${e.attacker} напал — ${e.won ? 'твой боец отбился' : 'твой боец проиграл'}`, { size: 15, weight: 700, color: e.won ? COLOR.win : COLOR.lose }));
+      m.card.content.add(text(this, 0, y + 20, `рейтинг ${e.ratingDelta > 0 ? '+' : ''}${e.ratingDelta}${reward}`, { size: 13, color: COLOR.inkQuiet }));
     });
+    if (inbox.length > shown.length) m.card.content.add(text(this, w, 4, `и ещё ${inbox.length - shown.length}`, { size: 12, color: COLOR.inkQuiet }).setOrigin(1, 0));
+    m.card.content.add(new Button(this, w / 2, m.card.innerH - 30, 'Понятно', { width: 200, height: 46, size: 20, onClick: () => m.close() }));
   }
 
   /** Бойцов нет — предложить собрать первого. */

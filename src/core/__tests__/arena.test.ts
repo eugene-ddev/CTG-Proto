@@ -1,8 +1,8 @@
-import { describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { START, BLUEPRINTS, getBlueprint, getItem } from '../../data/catalog';
 import type { CharacterBlueprint, Stat } from '../../data/types';
 import {
-  LOBBY_REGEN_MS, SHARDS_PER_CUBE, convertShards, drinkFromBag, endRun, equipFromBag, finishFight, forfeitIfInBattle, lobbyRegen,
+  LOBBY_REGEN_MS, setLossRule, SHARDS_PER_CUBE, convertShards, drinkFromBag, endRun, equipFromBag, finishFight, forfeitIfInBattle, lobbyRegen,
   markInBattle, startRun, stowToBag, SERIES_RETRIES, retriesLeft, surrenderRun, drinkPotion, potionSources, enemyLoot, takeLoot, fullRegenIn, repairAll, repairCost, repairCostForStat,
   activeCharacter, healFull, seriesRetries, setSeriesRetries,
 } from '../arena';
@@ -33,6 +33,9 @@ function ready(): { s: PlayerState; uid: string } {
 const win = (broken: number[], _items: string[] = []) => ({ win: true, brokenBlocks: broken, enemyBroken: 22, seed: 7 });
 
 describe('серия арены', () => {
+  // эти тесты описывают правило «drop» (оружие и рюкзак пропадают); в конфиге серия с ботами — «keep»
+  beforeAll(() => setLossRule({ bots: 'drop', players: 'drop' }));
+  afterAll(() => setLossRule(null));
   it('победа: разбитые кубы остаются, сам лут не падает — его забирают в рюкзак (takeLoot)', () => {
     const { s, uid } = ready();
     let st = startRun(s, uid)!;

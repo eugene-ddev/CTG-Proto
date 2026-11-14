@@ -10,6 +10,7 @@ import { BlueprintsScene } from './scenes/BlueprintsScene';
 import { CraftScene } from './scenes/CraftScene';
 import { CharactersScene } from './scenes/CharactersScene';
 import { OpponentScene } from './scenes/OpponentScene';
+import { RivalsScene } from './scenes/RivalsScene';
 import { BattleScene } from './scenes/BattleScene';
 import { UiKitScene } from './scenes/UiKitScene';
 import { DebugScene } from './scenes/DebugScene';
@@ -24,7 +25,7 @@ const game = new Phaser.Game({
   height: GAME_H,
   backgroundColor: '#2b2c30',
   scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
-  scene: [BootScene, LoginScene, MainMenuScene, InventoryScene, BlueprintsScene, CraftScene, CharactersScene, OpponentScene, BattleScene, UiKitScene, ModelsScene, DebugScene], // Debug последней — рисуется поверх
+  scene: [BootScene, LoginScene, MainMenuScene, InventoryScene, BlueprintsScene, CraftScene, CharactersScene, OpponentScene, RivalsScene, BattleScene, UiKitScene, ModelsScene, DebugScene], // Debug последней — рисуется поверх
 });
 
 // доступ из консоли браузера для отладки

@@ -7,6 +7,7 @@ export const SCENE = {
   craft: 'Craft',
   characters: 'Characters',
   opponent: 'Opponent',
+  rivals: 'Rivals',
   battle: 'Battle',
   uiKit: 'UiKit',
   models: 'Models',

@@ -212,6 +212,32 @@ class Store {
     }
   }
 
+  /**
+   * Запрос к серверу, который сам меняет состояние игрока (вызов соперника): сначала уходят накопленные
+   * действия, затем запрос; его ответ — новое состояние. false — отклонено или нет связи.
+   */
+  async call(fn: () => Promise<{ state: PlayerState; rev: number }>): Promise<boolean> {
+    if (!this.remote || this.requesting) return false;
+    for (let i = 0; i < 100 && (this.queue.length || this.sent); i++) {
+      await this.flush();
+      if (this.queue.length || this.sent) await new Promise((r) => setTimeout(r, 100));
+    }
+    if (this.queue.length || this.sent) return false;
+    this.requesting = true;
+    this.setStatus('saving');
+    try {
+      const res = await fn();
+      this.requesting = false;
+      this.adopt(res);
+      return true;
+    } catch (e) {
+      this.requesting = false;
+      console.warn(`[store] запрос отклонён: ${(e as Error).message}`);
+      this.setStatus('saved');
+      return false;
+    }
+  }
+
   /** Сброс прогресса (отладка): стартовое состояние выдаёт сервер; без сервера — локально. */
   reset() {
     if (!this.remote) {
