@@ -8,6 +8,7 @@ export const SCENE = {
   characters: 'Characters',
   opponent: 'Opponent',
   rivals: 'Rivals',
+  leaderboard: 'Leaderboard',
   battle: 'Battle',
   uiKit: 'UiKit',
   models: 'Models',

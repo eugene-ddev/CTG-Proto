@@ -30,7 +30,7 @@ export interface HeaderOpts {
   tab?: NavTab;
 }
 
-export type NavTab = 'menu' | 'inventory' | 'blueprints' | 'characters' | 'arena';
+export type NavTab = 'menu' | 'inventory' | 'blueprints' | 'characters' | 'arena' | 'rating';
 
 // первый экран и есть «Арена»: активный боец и «В бой»; экран противника подсвечивает его же
 const NAV: Array<[NavTab, string]> = [
@@ -38,8 +38,9 @@ const NAV: Array<[NavTab, string]> = [
   ['inventory', 'Инвентарь'],
   ['blueprints', 'Чертежи'],
   ['characters', 'Персонажи'],
+  ['rating', 'Рейтинг'],
 ];
-const NAV_W = 176;
+const NAV_W = 168;
 const NAV_GAP = 8;
 
 const FADE_MS = 140;
@@ -116,7 +117,7 @@ export abstract class BaseScene extends Phaser.Scene {
       if (run) return this.scene.key === SCENE.opponent ? undefined : this.go(SCENE.opponent, { charUid: run.charUid });
       return this.openArenaPicker();
     }
-    const key = { menu: SCENE.menu, inventory: SCENE.inventory, blueprints: SCENE.blueprints, characters: SCENE.characters }[tab];
+    const key = { menu: SCENE.menu, inventory: SCENE.inventory, blueprints: SCENE.blueprints, characters: SCENE.characters, rating: SCENE.leaderboard }[tab];
     // активная вкладка из вложенного экрана (крафт → «Чертежи») ведёт в корень раздела
     if (this.scene.key !== key) this.go(key);
   }

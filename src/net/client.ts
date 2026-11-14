@@ -34,6 +34,24 @@ export interface Rival {
   snapshot: FighterSnapshot;
 }
 
+export interface LeaderRow {
+  rank: number;
+  userId: string;
+  name: string;
+  rating: number;
+  wins: number;
+  losses: number;
+  me: boolean;
+}
+
+export interface LeaderboardView {
+  total: number;
+  me: LeaderRow | null;
+  top: LeaderRow[];
+  /** Строки вокруг своего места, если оно ниже показанных первых. */
+  around: LeaderRow[];
+}
+
 export interface RivalList {
   me: { rating: number; wins: number; losses: number };
   opponents: Rival[];
@@ -173,6 +191,8 @@ class Net {
   resetPlayer = () => this.rpc<PlayerView>('player/reset', {});
   /** Соперники для боя с игроками: ближайшие по рейтингу, с изменением рейтинга за победу и поражение. */
   opponents = () => this.rpc<RivalList>('arena/opponents', {});
+  /** Таблица рейтинга: первые места и строки вокруг своего. */
+  leaderboard = () => this.rpc<LeaderboardView>('arena/leaderboard', {});
   /** Вызвать игрока: сервер фиксирует снимок его бойца и рейтинги в серии. */
   challenge = (userId: string, charUid: string) => this.rpc<{ state: PlayerState; rev: number }>('arena/challenge', { userId, charUid });
 }
