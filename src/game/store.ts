@@ -119,8 +119,9 @@ class Store {
    */
   act<K extends ActionName>(name: K, ...args: ActionArgs<K>): boolean {
     if (this.remote && isServerSeeded(name)) throw new Error(`Действие ${name} решает сервер — вызывай store.request`);
-    const call: ActionCall = { name, args, now: this.now(), seed: randomSeed() };
-    const next = applyAction(this.current, name, args, call);
+    // аргументы — как их увидит сервер (после JSON): иначе undefined здесь и null там дали бы разный итог
+    const call: ActionCall = { name, args: JSON.parse(JSON.stringify(args)) as unknown[], now: this.now(), seed: randomSeed() };
+    const next = applyAction(this.current, name, call.args, call);
     if (!next) return false;
     if (next === this.current) return true; // ничего не изменилось — серверу сообщать нечего
     this.current = next;
@@ -179,7 +180,7 @@ class Store {
   async request<K extends ActionName>(name: K, ...args: ActionArgs<K>): Promise<boolean> {
     const remote = this.remote;
     if (!remote) {
-      const next = applyAction(this.current, name, args, { now: this.now(), seed: randomSeed() });
+      const next = applyAction(this.current, name, JSON.parse(JSON.stringify(args)) as unknown[], { now: this.now(), seed: randomSeed() });
       if (!next) return false;
       this.current = next;
       this.listeners.forEach((l) => l(next));
@@ -195,7 +196,7 @@ class Store {
     this.requesting = true;
     this.setStatus('saving');
     try {
-      const res = await remote.act(this.rev, [{ name, args, now: this.now(), seed: 0 }]);
+      const res = await remote.act(this.rev, [{ name, args: JSON.parse(JSON.stringify(args)) as unknown[], now: this.now(), seed: 0 }]);
       this.requesting = false;
       if (!res.ok) {
         console.warn(`[store] сервер отклонил ${name} (${res.reason})`);

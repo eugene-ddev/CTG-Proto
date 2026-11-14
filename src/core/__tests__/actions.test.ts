@@ -107,3 +107,50 @@ describe('бой серии: пересчёт по вводу', () => {
     }
   });
 });
+
+describe('аргументы действий', () => {
+  it('у каждого действия описаны типы аргументов', async () => {
+    const { ACTION_ARGS } = await import('../actions');
+    expect(Object.keys(ACTION_ARGS).sort()).toEqual(Object.keys(ACTIONS).sort());
+  });
+
+  it('индексы — только целые ≥ 0: null, дробь, строка и лишние аргументы отклоняются', () => {
+    let s = applyAction(fresh(), 'craft', [craftWaran], ctx)!;
+    s = applyAction(s, 'debugGiveAllItems', [], ctx)!;
+    const uid = s.characters[0].uid;
+    s = applyAction(s, 'equip', [uid, 'rucksack', s.inventory.find((e) => e.itemId === 'rucksack')!.uid], ctx)!;
+    const potion = s.inventory.find((e) => e.itemId.startsWith('restore'))!.uid;
+    for (const cell of [null, 1.5, '0', -1, 'x', {}]) expect(applyAction(s, 'putInBag', [uid, cell, potion], ctx)).toBeNull();
+    expect(applyAction(s, 'putInBag', [uid, 0, potion, 'лишний'], ctx)).toBeNull();
+    expect(applyAction(s, 'putInBag', [uid, 0, potion], ctx)).not.toBeNull();
+    expect(applyAction(s, 'equip', [uid, 'сумка', potion], ctx)).toBeNull();
+  });
+
+  it('через JSON (как на сервере) необязательный аргумент даёт тот же итог: лут ложится в рюкзак', async () => {
+    const { resolveFight } = await import('../fight');
+    const strong = { ...craftWaran, blockStats: waran.blocks.map((_, i): Stat => (['Strength', 'Stamina', 'Armor', 'Strength'] as const)[i % 4]) };
+    let s = applyAction(fresh(), 'craft', [strong], ctx)!;
+    s = applyAction(s, 'debugGiveAllItems', [], ctx)!;
+    const uid = s.characters[0].uid;
+    const inv = (id: string) => s.inventory.find((e) => e.itemId === id)!.uid;
+    s = applyAction(s, 'equip', [uid, 0, inv('rustyHammer')], ctx)!;
+    s = applyAction(s, 'equip', [uid, 1, inv('rustyAxe')], ctx)!;
+    s = applyAction(s, 'equip', [uid, 'rucksack', inv('rucksack')], ctx)!;
+    // перебираем противников, пока боец не победит
+    let won: ReturnType<typeof resolveFight> = null;
+    for (let seed = 1; seed < 200 && !won; seed++) {
+      const run = applyAction(s, 'startRun', [uid], { ...ctx, seed })!;
+      const r = resolveFight(applyAction(run, 'startFight', [], { ...ctx, seed })!, {});
+      if (r?.result.win && r.loot.length) won = r;
+    }
+    expect(won?.loot.length).toBeGreaterThan(0); // иначе тест ничего не проверяет
+    const direct = applyAction(won!.state, 'lootTake', [0, undefined], ctx)!;
+    const viaJson = applyAction(won!.state, 'lootTake', JSON.parse(JSON.stringify([0, undefined])), ctx)!;
+    expect(stateHash(viaJson)).toBe(stateHash(direct));
+    // вещь действительно в рюкзаке, а не «в ячейке null»
+    const bag = viaJson.characters[0].bag;
+    expect(bag.filter(Boolean)).toHaveLength(1);
+    expect(Object.keys(bag).every((k) => /^\d+$/.test(k))).toBe(true);
+    expect(viaJson.loot!.entries).toHaveLength(won!.loot.length - 1);
+  });
+});
