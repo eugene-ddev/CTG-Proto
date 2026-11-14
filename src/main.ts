@@ -4,6 +4,7 @@ import { store } from './game/store';
 import { lobbyRegen } from './core/arena';
 import { GAME_W, GAME_H } from './ui/theme';
 import { BootScene } from './scenes/BootScene';
+import { LoginScene } from './scenes/LoginScene';
 import { MainMenuScene } from './scenes/MainMenuScene';
 import { InventoryScene } from './scenes/InventoryScene';
 import { BlueprintsScene } from './scenes/BlueprintsScene';
@@ -24,7 +25,7 @@ const game = new Phaser.Game({
   height: GAME_H,
   backgroundColor: '#2b2c30',
   scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
-  scene: [BootScene, MainMenuScene, InventoryScene, BlueprintsScene, CraftScene, CharactersScene, OpponentScene, BattleScene, UiKitScene, ModelsScene, DebugScene], // Debug последней — рисуется поверх
+  scene: [BootScene, LoginScene, MainMenuScene, InventoryScene, BlueprintsScene, CraftScene, CharactersScene, OpponentScene, BattleScene, UiKitScene, ModelsScene, DebugScene], // Debug последней — рисуется поверх
 });
 
 // доступ из консоли браузера для отладки
@@ -51,3 +52,6 @@ setInterval(() => store.update((s) => {
   const next = lobbyRegen(s, Date.now());
   return next === s ? null : next;
 }), 1000);
+
+// свёрнутая или закрываемая вкладка — отправить несохранённое на сервер сразу
+document.addEventListener('visibilitychange', () => document.visibilityState === 'hidden' && void store.flush());

@@ -1,5 +1,6 @@
 export const SCENE = {
   boot: 'Boot',
+  login: 'Login',
   menu: 'MainMenu',
   inventory: 'Inventory',
   blueprints: 'Blueprints',

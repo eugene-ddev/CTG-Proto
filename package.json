@@ -1,7 +1,7 @@
 {
   "name": "ctg-prototype",
   "private": true,
-  "version": "0.0.108",
+  "version": "1.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -15,6 +15,7 @@
     "tune": "vitest run --config tools/tune/vitest.config.ts"
   },
   "dependencies": {
+    "@heroiclabs/nakama-js": "^2.8.0",
     "phaser": "^4.2.1",
     "three": "^0.187.0"
   },

@@ -11,6 +11,7 @@ import { Button } from '../ui/Button';
 import { text } from '../ui/text';
 import { COLOR, GAME_W, GAME_H, STAT_COLOR } from '../ui/theme';
 import { modelView } from '../ui/modelView';
+import { net } from '../net/client';
 import { FACE_RIGHT } from '../render/anim';
 
 /** «3:05», «1:02:10». */
@@ -29,7 +30,7 @@ export class MainMenuScene extends BaseScene {
 
   create() {
     this.setupScreen({ title: 'Арена', tab: 'menu' });
-    text(this, GAME_W / 2, 120, `ВЕРСИЯ ${__APP_VERSION__}`, { size: 18, color: COLOR.lightQuiet, letterSpacing: 1 }).setOrigin(0.5, 0);
+    text(this, GAME_W / 2, 120, `ВЕРСИЯ ${__APP_VERSION__}${net.playerName ? ` · ИГРОК ${net.playerName.toUpperCase()}` : ''}`, { size: 18, color: COLOR.lightQuiet, letterSpacing: 1 }).setOrigin(0.5, 0);
     text(this, GAME_W / 2, 142, 'Cuber The Game', { kind: 'display', size: 64, color: COLOR.title }).setOrigin(0.5, 0);
 
     // разделы — в верхних табах; здесь — активный боец и выход на арену

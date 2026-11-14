@@ -1,8 +1,9 @@
-// Единственный источник состояния игрока для сцен. Любое изменение сохраняется
-// и рассылается подписчикам — UI перерисовывает счётчики без ручного опроса.
+// Единственный источник состояния игрока для сцен. Состояние приходит с сервера при входе (hydrate); любое изменение
+// рассылается подписчикам и отправляется на сервер (этап 1 сети: целиком, с номером ревизии — на этапе 2 заменится
+// действиями, которые сервер исполняет сам).
 import { BLUEPRINTS, COMBAT, START, maxStackOf } from '../data/catalog';
 import type { ArenaRun } from '../core/arena';
-import { browserStorage, clearSave, loadState, saveState, type KeyValueStorage } from '../core/save';
+import { browserStorage, type KeyValueStorage } from '../core/save';
 import { SHARD_ID, SHARD_STACK, STATE_VERSION, addCubes, addItem, createInitialState, type PlayerState } from '../core/state';
 import { forfeitIfInBattle, lobbyRegen, setSeriesRetries } from '../core/arena';
 import { defaultCharacterName } from '../core/craft';
@@ -13,24 +14,103 @@ import type { Stat } from '../data/types';
 
 type Listener = (state: PlayerState) => void;
 
+/** Состояние отправки на сервер: всё сохранено, идёт отправка, нет связи (повтор через несколько секунд). */
+export type SyncStatus = 'local' | 'saved' | 'saving' | 'error';
+
+/** Сервер для стора: отправка состояния и сброс. Реализация — net/client.ts; в тестах не подключается. */
+export interface Remote {
+  sync(state: PlayerState, rev: number): Promise<{ conflict: false; rev: number } | { conflict: true; state: PlayerState; rev: number }>;
+  reset(): Promise<{ state: PlayerState; rev: number }>;
+}
+
+const SYNC_DELAY_MS = 300;
+const SYNC_RETRY_MS = 3000;
+
 const maxStack = (itemId: string) => maxStackOf(itemId);
 
 export const freshState = () => createInitialState(START, BLUEPRINTS.map((b) => b.id), maxStack);
 
 class Store {
+  /** localStorage — только для отладочных настроек; прогресс хранится на сервере. */
   private storage: KeyValueStorage | null = browserStorage();
   private listeners = new Set<Listener>();
+  private statusListeners = new Set<(s: SyncStatus) => void>();
   private current: PlayerState;
-  /** false — хранилище недоступно, прогресс живёт до перезагрузки. */
-  readonly persistent: boolean;
+  private remote: Remote | null = null;
+  private rev = 0;
+  private dirty = false;
+  private sending = false;
+  private timer: ReturnType<typeof setTimeout> | null = null;
+  private status: SyncStatus = 'local';
 
   constructor() {
-    this.persistent = this.storage !== null;
     setSeriesRetries(this.debug.retries ?? null);
-    const fresh = freshState();
-    // перезагрузка посреди боя арены — поражение; кубы, починенные в лобби за время отсутствия, — на месте
-    this.current = lobbyRegen(forfeitIfInBattle(migrate(loadState(this.storage, fresh) ?? fresh)), Date.now());
-    saveState(this.storage, this.current);
+    // до входа — стартовое состояние (тесты и экран входа); после входа его заменяет hydrate
+    this.current = freshState();
+  }
+
+  /**
+   * Состояние с сервера после входа. Перезагрузка посреди боя арены — поражение; кубы, починенные в лобби
+   * за время отсутствия, — на месте. Если от этого состояние изменилось — уходит на сервер.
+   */
+  hydrate(state: PlayerState, rev: number, remote: Remote) {
+    this.remote = remote;
+    this.rev = rev;
+    const next = lobbyRegen(forfeitIfInBattle(migrate(state)), Date.now());
+    this.current = next;
+    this.setStatus('saved');
+    if (JSON.stringify(next) !== JSON.stringify(state)) this.schedule();
+    this.listeners.forEach((l) => l(next));
+  }
+
+  get syncStatus(): SyncStatus {
+    return this.status;
+  }
+
+  onSyncStatus(listener: (s: SyncStatus) => void): () => void {
+    this.statusListeners.add(listener);
+    return () => this.statusListeners.delete(listener);
+  }
+
+  private setStatus(s: SyncStatus) {
+    if (s === this.status) return;
+    this.status = s;
+    this.statusListeners.forEach((l) => l(s));
+  }
+
+  private schedule(delay = SYNC_DELAY_MS) {
+    if (!this.remote) return;
+    this.dirty = true;
+    this.setStatus(this.status === 'error' ? 'error' : 'saving');
+    if (this.timer) clearTimeout(this.timer);
+    this.timer = setTimeout(() => void this.flush(), delay);
+  }
+
+  /** Отправить состояние на сервер сейчас (один запрос за раз; изменения во время отправки уйдут следующим). */
+  async flush(): Promise<void> {
+    if (this.timer) clearTimeout(this.timer);
+    this.timer = null;
+    if (!this.remote || !this.dirty || this.sending) return;
+    this.sending = true;
+    this.dirty = false;
+    try {
+      const res = await this.remote.sync(this.current, this.rev);
+      this.rev = res.rev;
+      if (res.conflict) {
+        // на сервере более новое состояние (игра открыта в другой вкладке) — берём его
+        this.dirty = false;
+        this.current = res.state;
+        this.listeners.forEach((l) => l(res.state));
+      }
+      this.sending = false;
+      if (this.dirty) this.schedule(0);
+      else this.setStatus('saved');
+    } catch {
+      this.sending = false;
+      this.dirty = true;
+      this.setStatus('error');
+      this.timer = setTimeout(() => void this.flush(), SYNC_RETRY_MS);
+    }
   }
 
   get state(): PlayerState {
@@ -42,7 +122,7 @@ class Store {
     const next = fn(this.current);
     if (!next) return false;
     this.current = next;
-    saveState(this.storage, next);
+    this.schedule();
     this.listeners.forEach((l) => l(next));
     return true;
   }
@@ -53,9 +133,25 @@ class Store {
     return () => this.listeners.delete(listener);
   }
 
+  /** Сброс прогресса: стартовое состояние выдаёт сервер (без сервера — локально). */
   reset() {
-    clearSave(this.storage);
-    this.update(() => freshState());
+    if (!this.remote) {
+      this.update(() => freshState());
+      return;
+    }
+    if (this.timer) clearTimeout(this.timer);
+    this.timer = null;
+    this.dirty = false;
+    this.setStatus('saving');
+    this.remote.reset().then(
+      (res) => {
+        this.rev = res.rev;
+        this.current = res.state;
+        this.setStatus('saved');
+        this.listeners.forEach((l) => l(res.state));
+      },
+      () => this.setStatus('error'),
+    );
   }
 
   /** Отладочные настройки (вкладка Debug) — отдельно от сейва, сброс прогресса их не трогает. */

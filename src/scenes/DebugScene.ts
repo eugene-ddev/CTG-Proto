@@ -1,3 +1,4 @@
+import { SERVER_ADDRESS, net } from '../net/client';
 import Phaser from 'phaser';
 import { BLUEPRINTS, BLUEPRINT_KIND_LABEL, EFFECTS, ITEMS, getItem } from '../data/catalog';
 import type { BlueprintKind } from '../data/types';
@@ -10,6 +11,7 @@ import { SCENE } from './keys';
 
 const W = 360;
 const H = 520;
+const SYNC_LABEL = { local: 'не подключён', saved: 'сохранено', saving: 'сохранение…', error: 'нет связи' } as const;
 /** Предел лимита повторов в отладке. */
 const MAX_RETRIES = 99;
 
@@ -63,8 +65,25 @@ export class DebugScene extends Phaser.Scene {
     this.healNote = text(this, 180, hy, '', { kind: 'mono', size: 12, color: COLOR.lose }).setOrigin(0, 0.5);
     this.panel.add([this.healBtn, this.healNote]);
 
+    // другой игрок на этом устройстве: вход забывается, аккаунт на сервере остаётся
+    this.panel.add(this.chip(W - 14, hy, 'Сменить игрока', () => {
+      void store.flush().then(() => {
+        net.forget();
+        location.reload();
+      });
+    }).setOrigin(1, 0.5));
+
+    // состояние отправки на сервер — всегда на экране, слева от кнопки DEBUG
+    const sync = text(this, GAME_W - 78, GAME_H - 12, '', { kind: 'mono', size: 11, color: COLOR.lightQuiet }).setOrigin(1, 1).setPadding(0, 0, 0, 5);
+    const showSync = () => {
+      const st = store.syncStatus;
+      sync.setText(st === 'saving' ? 'сохранение…' : st === 'error' ? 'нет связи с сервером — повтор…' : '').setColor(st === 'error' ? '#ff8a7a' : COLOR.lightQuiet);
+      this.render(store.state);
+    };
+    const unsubSync = store.onSyncStatus(showSync);
     const unsub = store.subscribe((s) => this.render(s));
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, unsub);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, unsubSync);
     this.render(store.state);
   }
 
@@ -121,7 +140,8 @@ export class DebugScene extends Phaser.Scene {
     this.healBtn.setAlpha(active?.brokenBlocks.length ? 1 : 0.5);
     this.info.setText(
       [
-        `СОХРАНЕНИЕ  ${store.persistent ? 'localStorage' : 'недоступно (до перезагрузки)'}`,
+        `ИГРОК       ${net.playerName || '— (нет входа)'}${net.profile ? ` · профиль ${net.profile}` : ''}`,
+        `СЕРВЕР      ${SERVER_ADDRESS} · ${SYNC_LABEL[store.syncStatus]}`,
         `КУБЫ        ${cubeCount(s)}`,
         `ИНВЕНТАРЬ   ${s.inventory.length} зап., ${totalItemCount(s)} шт.`,
         ...inv,

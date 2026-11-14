@@ -13,6 +13,6 @@ export class BootScene extends Phaser.Scene {
 
   create() {
     this.scene.launch(SCENE.debug);
-    this.scene.start(SCENE.menu);
+    this.scene.start(SCENE.login);
   }
 }
