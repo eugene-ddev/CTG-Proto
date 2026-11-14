@@ -47,6 +47,8 @@ export class CraftScene extends BaseScene {
   private assigned = new Map<number, Stat>();
   private allocator?: StatAllocator;
   private view?: ModelView;
+  /** «Создать персонажа» — пока игрок поправляет статы собранной модели. */
+  private createBtn?: Button;
   private progress!: ResourceBar;
   private costText!: Phaser.GameObjects.Text;
   private autoBtn!: Button;
@@ -97,6 +99,7 @@ export class CraftScene extends BaseScene {
     // количество для автосборки запоминается по чертежу — «Ещё раз» соберёт столько же
     this.qty = (this.registry.get(`craft.qty.${this.blueprintId}`) as number | undefined) ?? 1;
     this.view = undefined;
+    this.createBtn = undefined;
     this.allocator = undefined;
     this.variantText = undefined;
     this.counts = undefined;
@@ -410,6 +413,8 @@ export class CraftScene extends BaseScene {
   }
 
   private resetPlacement() {
+    this.createBtn?.destroy();
+    this.createBtn = undefined;
     this.placed.clear();
     this.assigned.clear();
     this.updateOpen();
@@ -424,6 +429,11 @@ export class CraftScene extends BaseScene {
     this.busy = true;
     this.refresh();
     const order = buildOrder(this.bp.blocks, this.placed);
+    // модель уже собрана (игрок поправлял статы) — достраивать нечего
+    if (!order.length) {
+      this.busy = false;
+      return this.finish(false);
+    }
     // статы оставшихся кубов — слоями спереди назад (combat.json → layout.autoBuild): броня закрывает перёд
     let plan: Map<number, Stat> | null = null;
     if (this.isChar()) {
@@ -447,7 +457,38 @@ export class CraftScene extends BaseScene {
     });
   }
 
-  private finish(manual: boolean) {
+  /**
+   * Персонаж собран целиком: создать сейчас или сначала поправить расположение стат. «Поправить» оставляет
+   * модель на экране — выбери цвет в палитре и кликай по кубам; кубы спишутся только при создании.
+   */
+  private askCreate(manual: boolean) {
+    const create = () => this.finish(manual, true);
+    const adjust = () => {
+      if (this.createBtn || this.done) return;
+      this.createBtn = new Button(this, 450, 618, 'Создать персонажа', { width: 320, height: 52, size: 22, onClick: create });
+      this.placeHint?.setText('Выбери цвет в палитре и кликни по кубу — перекрасить. Готово — «Создать персонажа».');
+    };
+    let made = false;
+    const m = new Modal(this, { title: 'Персонаж собран', width: 560, height: 280, onClose: () => !made && adjust() });
+    const w = m.card.innerW;
+    m.card.content.add(text(this, w / 2, 8, 'Создать персонажа сейчас или сначала поправить, где какие статы?\nКубы спишутся только при создании.', { size: 16, align: 'center', wrap: w }).setOrigin(0.5, 0));
+    m.card.content.add(new Button(this, w / 2 - 130, 130, 'Поправить статы', { variant: 'beige', width: 240, height: 52, size: 19, onClick: () => m.close() }));
+    m.card.content.add(
+      new Button(this, w / 2 + 130, 130, 'Создать персонажа', {
+        width: 240, height: 52, size: 19,
+        onClick: () => {
+          made = true;
+          m.close();
+          create();
+        },
+      }),
+    );
+  }
+
+  private finish(manual: boolean, confirmed = false) {
+    if (this.isChar() && !this.editChar && !confirmed) return this.askCreate(manual);
+    this.createBtn?.destroy();
+    this.createBtn = undefined;
     const bp = this.bp!;
     const blockStats = this.isChar() ? bp.blocks.map((_, i) => this.assigned.get(i)!) : undefined;
     const opts = { manual, variantKey: this.variant?.key, maxStack: store.maxStack, blockStats };
