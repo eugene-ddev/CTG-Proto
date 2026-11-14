@@ -3,12 +3,12 @@
 // ?profile=имя — отдельный игрок в том же браузере (свой device id): удобно проверять бои с игроками в двух вкладках.
 import { Client, type Session } from '@heroiclabs/nakama-js';
 import type { ActionCall } from '../core/actions';
-import type { FighterSnapshot } from '../core/arena';
+import type { ArenaProfile, FighterSnapshot } from '../core/arena';
 import type { PlayerState } from '../core/state';
 import type { ActResult } from '../game/store';
 
 /** Версия протокола клиент ↔ сервер: меняется вместе с несовместимыми изменениями RPC. */
-export const PROTOCOL_VERSION = 4;
+export const PROTOCOL_VERSION = 5;
 
 export interface PlayerView {
   state: PlayerState;
@@ -19,6 +19,8 @@ export interface PlayerView {
   shared: { proto: string; digest: string };
   /** Сервер в режиме отладки: исполняет debug-действия и сброс. */
   debug: boolean;
+  /** Рейтинг, счёт и журнал нападений. */
+  arena: ArenaProfile;
 }
 
 
@@ -53,7 +55,7 @@ export interface LeaderboardView {
 }
 
 export interface RivalList {
-  me: { rating: number; wins: number; losses: number };
+  me: ArenaProfile;
   opponents: Rival[];
 }
 
@@ -191,6 +193,8 @@ class Net {
   resetPlayer = () => this.rpc<PlayerView>('player/reset', {});
   /** Соперники для боя с игроками: ближайшие по рейтингу, с изменением рейтинга за победу и поражение. */
   opponents = () => this.rpc<RivalList>('arena/opponents', {});
+  /** Журнал нападений прочитан: награды за отбитые нападения — в инвентарь, журнал очищается. */
+  claimInbox = () => this.rpc<{ state: PlayerState; rev: number; arena: ArenaProfile }>('arena/claimInbox', {});
   /** Таблица рейтинга: первые места и строки вокруг своего. */
   leaderboard = () => this.rpc<LeaderboardView>('arena/leaderboard', {});
   /** Вызвать игрока: сервер фиксирует снимок его бойца и рейтинги в серии. */

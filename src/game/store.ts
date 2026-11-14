@@ -6,7 +6,7 @@ import { BLUEPRINTS, COMBAT, START, maxStackOf } from '../data/catalog';
 import type { ArenaRun } from '../core/arena';
 import { browserStorage, type KeyValueStorage } from '../core/save';
 import { SHARD_ID, SHARD_STACK, STATE_VERSION, addCubes, addItem, createInitialState, type PlayerState } from '../core/state';
-import { setSeriesRetries } from '../core/arena';
+import { freshArenaProfile, setSeriesRetries, type ArenaProfile } from '../core/arena';
 import { applyAction, isServerSeeded, stateHash, type ActionArgs, type ActionCall, type ActionName } from '../core/actions';
 import { randomSeed } from '../core/rng';
 import { defaultCharacterName } from '../core/craft';
@@ -22,14 +22,14 @@ export type SyncStatus = 'local' | 'saved' | 'saving' | 'error';
 
 /** Ответ сервера на пачку действий. */
 export type ActResult =
-  | { ok: true; rev: number; hash: string; state?: PlayerState }
+  | { ok: true; rev: number; hash: string; state?: PlayerState; arena?: ArenaProfile }
   /** rejected — действие отклонено сервером, conflict — ревизия устарела (игра в другой вкладке): берём состояние сервера. */
   | { ok: false; reason: 'rejected' | 'conflict'; state: PlayerState; rev: number; action?: string };
 
 /** Сервер для стора. Реализация — net/client.ts; в тестах не подключается. */
 export interface Remote {
   act(rev: number, actions: ActionCall[]): Promise<ActResult>;
-  read(): Promise<{ state: PlayerState; rev: number; serverTime: number }>;
+  read(): Promise<{ state: PlayerState; rev: number; serverTime: number; arena?: ArenaProfile }>;
   reset(): Promise<{ state: PlayerState; rev: number }>;
 }
 
@@ -57,6 +57,8 @@ class Store {
   private clockOffset = 0;
   /** Идёт запрос, итог которого решает сервер (request): обычная отправка ждёт. */
   private requesting = false;
+  /** Рейтинг, счёт и журнал нападений — отдельная запись на сервере (не часть состояния). */
+  private profile: ArenaProfile = freshArenaProfile();
 
   constructor() {
     setSeriesRetries(this.debug.retries ?? null);
@@ -65,7 +67,7 @@ class Store {
   }
 
   /** Состояние с сервера после входа. */
-  hydrate(view: { state: PlayerState; rev: number; serverTime: number }, remote: Remote) {
+  hydrate(view: { state: PlayerState; rev: number; serverTime: number; arena?: ArenaProfile }, remote: Remote) {
     this.remote = remote;
     // лимит повторов на сервере — из конфига: отладочное переопределение работает только без сервера
     setSeriesRetries(null);
@@ -73,7 +75,8 @@ class Store {
   }
 
   /** Принять состояние сервера: неподтверждённые действия отбрасываются. */
-  private adopt(view: { state: PlayerState; rev: number; serverTime?: number }) {
+  private adopt(view: { state: PlayerState; rev: number; serverTime?: number; arena?: ArenaProfile }) {
+    if (view.arena) this.profile = view.arena;
     this.queue = [];
     this.sent = 0;
     if (this.timer) clearTimeout(this.timer);
@@ -83,6 +86,18 @@ class Store {
     this.current = view.state;
     this.setStatus('saved');
     this.listeners.forEach((l) => l(view.state));
+  }
+
+  /** Рейтинг, счёт боёв с игроками и журнал нападений. */
+  get arena(): ArenaProfile {
+    return this.profile;
+  }
+
+  /** Свежие рейтинг и журнал от сервера (после боя с игроком, из списка соперников). */
+  setArena(arena: ArenaProfile | undefined) {
+    if (!arena) return;
+    this.profile = arena;
+    this.listeners.forEach((l) => l(this.current));
   }
 
   /** Время сервера по оценке клиента, мс — для таймеров на экране и для действий. */
@@ -150,6 +165,7 @@ class Store {
         return this.adopt(res);
       }
       this.rev = res.rev;
+      this.setArena(res.arena);
       this.queue = this.queue.slice(batch.length);
       this.sent = 0;
       if (res.hash !== expected) {
@@ -216,7 +232,7 @@ class Store {
    * Запрос к серверу, который сам меняет состояние игрока (вызов соперника): сначала уходят накопленные
    * действия, затем запрос; его ответ — новое состояние. false — отклонено или нет связи.
    */
-  async call(fn: () => Promise<{ state: PlayerState; rev: number }>): Promise<boolean> {
+  async call(fn: () => Promise<{ state: PlayerState; rev: number; arena?: ArenaProfile }>): Promise<boolean> {
     if (!this.remote || this.requesting) return false;
     for (let i = 0; i < 100 && (this.queue.length || this.sent); i++) {
       await this.flush();

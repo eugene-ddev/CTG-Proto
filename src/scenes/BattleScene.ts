@@ -1,7 +1,6 @@
 import Phaser from 'phaser';
 import { BaseScene } from './BaseScene';
 import { createRunBattle, resolveFight, type FightInputs } from '../core/fight';
-import { RATING_START } from '../core/rating';
 import { lossRule, type RivalInfo } from '../core/arena';
 import { SCENE, type BattleSceneData, type CharactersSceneData, type OpponentSceneData } from './keys';
 import { EFFECTS, getBlueprint, getItem, hasItem, itemModel, weaponStrike } from '../data/catalog';
@@ -1057,7 +1056,7 @@ export class BattleScene extends BaseScene {
     const p = this.b.player;
     add(text(this, w / 2, 0, win ? 'ПОБЕДА' : 'ПОРАЖЕНИЕ', { kind: 'display', size: 44, color: win ? COLOR.win : COLOR.lose }).setOrigin(0.5, 0));
     const pend = this.rival ? store.state.pvpPending : null;
-    const ratingNote = this.rival && pend ? ` · рейтинг ${pend.delta > 0 ? '+' : ''}${pend.delta} → ${store.state.rating ?? RATING_START}` : '';
+    const ratingNote = this.rival && pend ? ` · рейтинг ${pend.delta > 0 ? '+' : ''}${pend.delta} → ${Math.max(0, this.rival.myRating + pend.delta)}` : '';
     add(text(this, w / 2, 56, `${reason} · ходов: ${this.b.turn} · кубы бойца: ${p.aliveBlocks}/${p.blocks.length}${ratingNote}`, { size: 14, align: 'center' }).setOrigin(0.5, 0));
     let y = 92;
     if (win && out) {

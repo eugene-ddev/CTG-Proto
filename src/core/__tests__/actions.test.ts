@@ -193,8 +193,6 @@ describe('серии двух видов', () => {
     const lost = applyAction(inFight, 'finishFight', [{ stopAfter: 0 }], ctx)!;
     const d = ratingDeltas(1000, 1200);
     expect(d.win).toBeGreaterThan(-d.lose); // победа над сильным даёт больше, чем отнимает поражение от него
-    expect(lost.rating).toBe(1000 + d.lose);
-    expect(lost.pvp).toEqual({ wins: 0, losses: 1 });
     expect(lost.pvpPending).toMatchObject({ opponentId: 'u2', win: false, delta: d.lose });
     expect(lost.arenaRun).toBeNull();
     expect(lost.characters[0].equipment[0]).toBeNull();

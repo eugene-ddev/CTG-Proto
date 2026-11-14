@@ -3,7 +3,6 @@
 import Phaser from 'phaser';
 import { SERIES_LENGTH, activeCharacter } from '../core/arena';
 import { itemOf } from '../core/character';
-import { RATING_START } from '../core/rating';
 import { getBlueprint, hasBlueprint, hasItem } from '../data/catalog';
 import type { CharacterBlueprint } from '../data/types';
 import { store } from '../game/store';
@@ -37,7 +36,7 @@ export class RivalsScene extends BaseScene {
     this.setupScreen({
       title: 'Соперники',
       kicker: run ? `Бой с игроками · бой ${run.fight} из ${SERIES_LENGTH} · побед ${run.wins}` : `Бой с игроками · серия из ${SERIES_LENGTH} боёв`,
-      subtitle: `твой рейтинг ${s.rating ?? RATING_START} · победил — забираешь лут соперника и рейтинг, проиграл — теряешь оружие, рюкзак и рейтинг`,
+      subtitle: `твой рейтинг ${store.arena.rating} · победил — забираешь лут соперника и рейтинг, проиграл — теряешь оружие, рюкзак и рейтинг`,
       back: run ? null : SCENE.menu,
     });
     if (run) {
@@ -57,7 +56,10 @@ export class RivalsScene extends BaseScene {
       return;
     }
     net.opponents().then(
-      (list) => this.scene.isActive() && (note.destroy(), this.renderList(card, list, c.uid)),
+      (list) => {
+        store.setArena(list.me);
+        if (this.scene.isActive()) (note.destroy(), this.renderList(card, list, c.uid));
+      },
       (e: Error) => this.scene.isActive() && note.setText(e.message),
     );
   }

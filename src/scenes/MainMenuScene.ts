@@ -12,7 +12,6 @@ import { text } from '../ui/text';
 import { COLOR, GAME_W, GAME_H, STAT_COLOR } from '../ui/theme';
 import { modelView } from '../ui/modelView';
 import { net } from '../net/client';
-import { RATING_START } from '../core/rating';
 import { Modal } from '../ui/Modal';
 import { FACE_RIGHT } from '../render/anim';
 
@@ -130,16 +129,19 @@ export class MainMenuScene extends BaseScene {
         onClick: () => this.go(SCENE.rivals),
       });
     }
-    text(this, cx, 684, `рейтинг ${s.rating ?? RATING_START}${s.pvp ? ` · побед ${s.pvp.wins} · поражений ${s.pvp.losses}` : ''}`, { size: 13, color: COLOR.lightQuiet }).setOrigin(0.5, 0);
+    const a = store.arena;
+    text(this, cx, 684, `рейтинг ${a.rating} · побед ${a.wins} · поражений ${a.losses}`, { size: 13, color: COLOR.lightQuiet }).setOrigin(0.5, 0);
     this.showInbox();
   }
 
   /** Журнал нападений: кто вызывал бойца, пока игрока не было. Показывается один раз. */
   private showInbox() {
-    const inbox = store.state.inbox ?? [];
+    const inbox = store.arena.inbox;
     if (!inbox.length) return;
     const shown = inbox.slice(-6).reverse();
-    const m = new Modal(this, { title: 'Пока тебя не было', width: 620, height: 200 + shown.length * 44, onClose: () => store.act('inboxClear') });
+    const rewards = inbox.some((e) => e.reward);
+    // закрытие окна — журнал прочитан: сервер кладёт награды в инвентарь и очищает журнал
+    const m = new Modal(this, { title: 'Пока тебя не было', width: 620, height: 200 + shown.length * 44, onClose: () => void store.call(() => net.claimInbox()) });
     const w = m.card.innerW;
     shown.forEach((e, k) => {
       const y = 4 + k * 44;
@@ -148,7 +150,7 @@ export class MainMenuScene extends BaseScene {
       m.card.content.add(text(this, 0, y + 20, `рейтинг ${e.ratingDelta > 0 ? '+' : ''}${e.ratingDelta}${reward}`, { size: 13, color: COLOR.inkQuiet }));
     });
     if (inbox.length > shown.length) m.card.content.add(text(this, w, 4, `и ещё ${inbox.length - shown.length}`, { size: 12, color: COLOR.inkQuiet }).setOrigin(1, 0));
-    m.card.content.add(new Button(this, w / 2, m.card.innerH - 30, 'Понятно', { width: 200, height: 46, size: 20, onClick: () => m.close() }));
+    m.card.content.add(new Button(this, w / 2, m.card.innerH - 30, rewards ? 'Забрать' : 'Понятно', { width: 200, height: 46, size: 20, onClick: () => m.close() }));
   }
 
   /** Бойцов нет — предложить собрать первого. */

@@ -1,6 +1,5 @@
 // «Рейтинг»: таблица лидеров боёв с игроками — место, имя, рейтинг, победы и поражения; своя строка выделена.
 import Phaser from 'phaser';
-import { RATING_START } from '../core/rating';
 import { store } from '../game/store';
 import { net, type LeaderRow, type LeaderboardView } from '../net/client';
 import { Card } from '../ui/Panel';
@@ -21,11 +20,11 @@ export class LeaderboardScene extends BaseScene {
 
   create() {
     this.page = 0;
-    const s = store.state;
+    const a = store.arena;
     this.setupScreen({
       title: 'Рейтинг',
       tab: 'rating',
-      subtitle: `твой рейтинг ${s.rating ?? RATING_START}${s.pvp ? ` · побед ${s.pvp.wins} · поражений ${s.pvp.losses}` : ''} · меняется в боях с игроками: победа над сильным даёт больше`,
+      subtitle: `твой рейтинг ${a.rating} · побед ${a.wins} · поражений ${a.losses} · меняется в боях с игроками: победа над сильным даёт больше`,
     });
     const card = new Card(this, 240, 146, 800, 540, { title: 'Таблица лидеров', aside: ' ' });
     const note = text(this, card.innerW / 2, 200, 'Загрузка…', { size: 16 }).setOrigin(0.5);
