@@ -1,3 +1,4 @@
+import { fighterInputOf } from '../core/fight';
 import Phaser from 'phaser';
 import { BaseScene } from './BaseScene';
 import { SCENE, type BattleSceneData, type OpponentSceneData } from './keys';
@@ -42,16 +43,7 @@ const CHIP_Y = 580;
 const pct = (v: number) => `${(v * 100).toFixed(1).replace('.0', '')}%`;
 
 /** Вход для боя из персонажа игрока. */
-export function playerFighterInput(c: CharacterState) {
-  return {
-    name: c.name,
-    blueprintId: c.blueprintId,
-    blockStats: c.blockStats,
-    brokenBlocks: c.brokenBlocks,
-    equipment: c.equipment.map((e) => (e && hasItem(e.itemId) ? (itemOf(e) as EquipmentItem) : null)),
-    target: c.target,
-  };
-}
+export const playerFighterInput = fighterInputOf;
 
 /**
  * «Новый противник»: кто против нас (бот той же категории) и в каком порядке бить его блоки.
@@ -59,6 +51,7 @@ export function playerFighterInput(c: CharacterState) {
  */
 export class OpponentScene extends BaseScene {
   private charUid = '';
+  private starting = false;
   private oppSeed = 0;
   private except?: string;
   private opp!: Opponent;
@@ -87,8 +80,19 @@ export class OpponentScene extends BaseScene {
   }
 
   create() {
-    if (store.state.characters.some((x) => x.uid === this.charUid)) store.act('startRun', this.charUid);
     const c = store.state.characters.find((x) => x.uid === this.charUid);
+    // противника выбирает сервер: пока ответа нет — экран ожидания, затем сцена открывается заново
+    if (c && !store.state.arenaRun?.opp) {
+      this.setupScreen({ title: 'Новый противник', kicker: 'Арена', back: null });
+      const note = text(this, GAME_W / 2, 340, 'Подбор противника…', { size: 20, color: COLOR.light }).setOrigin(0.5);
+      void store.request('startRun', this.charUid).then((ok) => {
+        if (!this.scene.isActive()) return;
+        if (ok && store.state.arenaRun?.opp) return this.scene.restart({ charUid: this.charUid } satisfies OpponentSceneData);
+        note.setText('Не удалось начать серию — нет связи с сервером или серия идёт другим бойцом.');
+        new Button(this, GAME_W / 2, 420, 'В меню', { width: 240, height: 52, onClick: () => this.go(SCENE.menu) });
+      });
+      return;
+    }
     const run = store.state.arenaRun;
     // экран подготовки к бою — без табов главного меню: выход — кнопкой слева внизу
     this.setupScreen({
@@ -157,8 +161,15 @@ export class OpponentScene extends BaseScene {
       height: 60,
       size: 32,
       onClick: () => {
-        store.act('markInBattle');
-        this.go(SCENE.battle, { charUid: c.uid, oppSeed: opp.seed, oppLevel: opp.level, oppExact: 'exact' in opp && !!opp.exact, seed: randomSeed() } satisfies BattleSceneData);
+        // зерно боя выдаёт сервер; сцена боя берёт противника и зерно из состояния
+        if (this.starting) return;
+        this.starting = true;
+        void store.request('startFight').then((ok) => {
+          this.starting = false;
+          if (!this.scene.isActive()) return;
+          if (ok) this.go(SCENE.battle, { charUid: c.uid } satisfies BattleSceneData);
+          else this.cameras.main.shake(120, 0.003);
+        });
       },
     });
   }

@@ -48,3 +48,62 @@ describe('действия', () => {
     expect(debug.sort()).toEqual(['debugAddCubes', 'debugGiveAllItems', 'debugHeal']);
   });
 });
+
+describe('бой серии: пересчёт по вводу', () => {
+  const inRun = () => {
+    let s = applyAction(fresh(), 'craft', [craftWaran], ctx)!;
+    s = applyAction(s, 'debugGiveAllItems', [], ctx)!;
+    const uid = s.characters[0].uid;
+    s = applyAction(s, 'equip', [uid, 0, s.inventory.find((e) => e.itemId === 'rustySword')!.uid], ctx)!;
+    s = applyAction(s, 'equip', [uid, 'rucksack', s.inventory.find((e) => e.itemId === 'rucksack')!.uid], ctx)!;
+    s = applyAction(s, 'startRun', [uid], ctx)!;
+    return applyAction(s, 'startFight', [], { ...ctx, seed: 777 })!;
+  };
+
+  it('бой нельзя закончить, не начав; начатый нельзя начать снова', () => {
+    const s = applyAction(fresh(), 'craft', [craftWaran], ctx)!;
+    const run = applyAction(s, 'startRun', [s.characters[0].uid], ctx)!;
+    expect(applyAction(run, 'finishFight', [{}], ctx)).toBeNull();
+    expect(applyAction(inRun(), 'startFight', [], ctx)).toBeNull();
+  });
+
+  it('итог зависит только от состояния и ввода: один ввод — один итог, сдача — поражение', async () => {
+    const { replayFight } = await import('../fight');
+    const s = inRun();
+    expect(s.arenaRun?.battleSeed).toBe(777);
+    const a = applyAction(s, 'finishFight', [{}], ctx)!;
+    const b = applyAction(JSON.parse(JSON.stringify(s)), 'finishFight', [{}], { ...ctx, seed: 1 })!;
+    expect(stateHash(a)).toBe(stateHash(b));
+    const played = replayFight(s, {})!;
+    expect(played.battle.over).toBeTruthy();
+    // сдача на первом ходу — поражение (с повтором серия продолжается, бой закрыт)
+    const gaveUp = replayFight(s, { stopAfter: 0 })!;
+    expect(gaveUp.result.win).toBe(false);
+    const lost = applyAction(s, 'finishFight', [{ stopAfter: 0 }], ctx)!;
+    expect(lost.arenaRun?.inBattle).toBe(false);
+    expect(lost.arenaRun?.retriesUsed).toBe(1);
+    // мусорный ввод не ломает пересчёт и не даёт победу сам по себе
+    const junk = replayFight(s, { artifacts: [{ after: -1, slot: 99 }, { after: 0.5, slot: 0 }] as never })!;
+    expect(junk.result.win).toBe(played.result.win);
+  });
+
+  it('лут берётся только из состояния: чужую запись подсунуть нельзя', async () => {
+    const { resolveFight } = await import('../fight');
+    // ищем зерно боя, с которым боец побеждает
+    let won = null as ReturnType<typeof resolveFight>;
+    const base = inRun();
+    for (let seed = 1; seed < 400 && !won?.result.win; seed++) {
+      const s = { ...base, arenaRun: { ...base.arenaRun!, battleSeed: seed } };
+      won = resolveFight(s, {});
+    }
+    if (!won?.result.win) return; // с этим оружием победы не нашлось — проверять нечего
+    const s = won.state;
+    expect(s.loot?.entries.length).toBe(won.loot.length);
+    expect(applyAction(s, 'lootTake', [99], ctx)).toBeNull();
+    if (won.loot.length) {
+      const taken = applyAction(s, 'lootTake', [0], ctx)!;
+      expect(taken.loot!.entries.length).toBeLessThanOrEqual(s.loot!.entries.length);
+      expect(applyAction(taken, 'lootClose', [], ctx)!.loot).toBeNull();
+    }
+  });
+});

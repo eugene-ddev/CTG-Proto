@@ -7,7 +7,7 @@ import type { PlayerState } from '../core/state';
 import type { ActResult } from '../game/store';
 
 /** Версия протокола клиент ↔ сервер: меняется вместе с несовместимыми изменениями RPC. */
-export const PROTOCOL_VERSION = 2;
+export const PROTOCOL_VERSION = 3;
 
 export interface PlayerView {
   state: PlayerState;

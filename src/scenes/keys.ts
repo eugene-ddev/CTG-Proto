@@ -37,12 +37,6 @@ export interface OpponentSceneData {
 
 /** Бой: боец, противник (по seed) и seed боя. */
 export interface BattleSceneData {
+  /** Боец серии. Противник и зерно боя — в состоянии (arenaRun), их выдаёт сервер. */
   charUid: string;
-  oppSeed: number;
-  /** Уровень оружия игрока, под который сгенерирован противник. */
-  oppLevel?: number;
-  /** oppLevel — точный уровень оружия бота (серия: растёт от боя к бою). */
-  oppExact?: boolean;
-  except?: string;
-  seed: number;
 }

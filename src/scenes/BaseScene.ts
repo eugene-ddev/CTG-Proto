@@ -178,7 +178,6 @@ export abstract class BaseScene extends Phaser.Scene {
         width: 230,
         height: 52,
         onClick: () => {
-          store.act('startRun', selected);
           this.go(SCENE.opponent, { charUid: selected } satisfies OpponentSceneData);
         },
       }),

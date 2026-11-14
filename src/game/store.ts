@@ -7,7 +7,7 @@ import type { ArenaRun } from '../core/arena';
 import { browserStorage, type KeyValueStorage } from '../core/save';
 import { SHARD_ID, SHARD_STACK, STATE_VERSION, addCubes, addItem, createInitialState, type PlayerState } from '../core/state';
 import { setSeriesRetries } from '../core/arena';
-import { applyAction, stateHash, type ActionArgs, type ActionCall, type ActionName } from '../core/actions';
+import { applyAction, isServerSeeded, stateHash, type ActionArgs, type ActionCall, type ActionName } from '../core/actions';
 import { randomSeed } from '../core/rng';
 import { defaultCharacterName } from '../core/craft';
 import { buildOrder } from '../core/build';
@@ -22,7 +22,7 @@ export type SyncStatus = 'local' | 'saved' | 'saving' | 'error';
 
 /** Ответ сервера на пачку действий. */
 export type ActResult =
-  | { ok: true; rev: number; hash: string }
+  | { ok: true; rev: number; hash: string; state?: PlayerState }
   /** rejected — действие отклонено сервером, conflict — ревизия устарела (игра в другой вкладке): берём состояние сервера. */
   | { ok: false; reason: 'rejected' | 'conflict'; state: PlayerState; rev: number; action?: string };
 
@@ -55,6 +55,8 @@ class Store {
   private status: SyncStatus = 'local';
   /** Часы сервера минус часы браузера, мс. */
   private clockOffset = 0;
+  /** Идёт запрос, итог которого решает сервер (request): обычная отправка ждёт. */
+  private requesting = false;
 
   constructor() {
     setSeriesRetries(this.debug.retries ?? null);
@@ -116,6 +118,7 @@ class Store {
    * (условия не выполнены), состояние не изменилось.
    */
   act<K extends ActionName>(name: K, ...args: ActionArgs<K>): boolean {
+    if (this.remote && isServerSeeded(name)) throw new Error(`Действие ${name} решает сервер — вызывай store.request`);
     const call: ActionCall = { name, args, now: this.now(), seed: randomSeed() };
     const next = applyAction(this.current, name, args, call);
     if (!next) return false;
@@ -124,7 +127,7 @@ class Store {
     if (this.remote) {
       this.queue.push(call);
       this.setStatus(this.status === 'error' ? 'error' : 'saving');
-      if (!this.sent && !this.timer) this.timer = setTimeout(() => void this.flush(), SEND_DELAY_MS);
+      if (!this.sent && !this.timer && !this.requesting) this.timer = setTimeout(() => void this.flush(), SEND_DELAY_MS);
     }
     this.listeners.forEach((l) => l(next));
     return true;
@@ -135,7 +138,7 @@ class Store {
     if (this.timer) clearTimeout(this.timer);
     this.timer = null;
     const remote = this.remote;
-    if (!remote || this.sent || !this.queue.length) return;
+    if (!remote || this.sent || this.requesting || !this.queue.length) return;
     const batch = this.queue.slice();
     this.sent = batch.length;
     const expected = stateHash(this.current); // состояние после всех действий пачки
@@ -166,6 +169,46 @@ class Store {
   subscribe(listener: Listener): () => void {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
+  }
+
+  /**
+   * Действие, итог которого решает сервер (выбор противника, зерно боя): клиент его не предсказывает, а ждёт
+   * ответ и берёт состояние сервера. Сначала уходят накопленные действия. false — отклонено или нет связи.
+   * Без сервера (тесты) исполняется локально.
+   */
+  async request<K extends ActionName>(name: K, ...args: ActionArgs<K>): Promise<boolean> {
+    const remote = this.remote;
+    if (!remote) {
+      const next = applyAction(this.current, name, args, { now: this.now(), seed: randomSeed() });
+      if (!next) return false;
+      this.current = next;
+      this.listeners.forEach((l) => l(next));
+      return true;
+    }
+    if (this.requesting) return false;
+    // дождаться, пока сервер подтвердит всё сделанное раньше
+    for (let i = 0; i < 100 && (this.queue.length || this.sent); i++) {
+      await this.flush();
+      if (this.queue.length || this.sent) await new Promise((r) => setTimeout(r, 100));
+    }
+    if (this.queue.length || this.sent) return false;
+    this.requesting = true;
+    this.setStatus('saving');
+    try {
+      const res = await remote.act(this.rev, [{ name, args, now: this.now(), seed: 0 }]);
+      this.requesting = false;
+      if (!res.ok) {
+        console.warn(`[store] сервер отклонил ${name} (${res.reason})`);
+        this.adopt(res);
+        return false;
+      }
+      this.adopt(res.state ? { state: res.state, rev: res.rev } : await remote.read());
+      return true;
+    } catch {
+      this.requesting = false;
+      this.setStatus('error');
+      return false;
+    }
   }
 
   /** Сброс прогресса (отладка): стартовое состояние выдаёт сервер; без сервера — локально. */

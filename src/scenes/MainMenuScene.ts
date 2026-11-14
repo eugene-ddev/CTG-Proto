@@ -116,7 +116,6 @@ export class MainMenuScene extends BaseScene {
       onClick: () => {
         // активный боец сразу идёт к противнику; идёт серия — продолжаем её
         if (run) return this.go(SCENE.opponent, { charUid: run.charUid } satisfies OpponentSceneData);
-        store.act('startRun', c.uid);
         this.go(SCENE.opponent, { charUid: c.uid } satisfies OpponentSceneData);
       },
     });

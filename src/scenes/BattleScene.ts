@@ -1,24 +1,20 @@
 import Phaser from 'phaser';
 import { BaseScene } from './BaseScene';
+import { createRunBattle, resolveFight, type FightInputs } from '../core/fight';
 import { SCENE, type BattleSceneData, type CharactersSceneData, type OpponentSceneData } from './keys';
 import { EFFECTS, getBlueprint, getItem, hasItem, itemModel, weaponStrike } from '../data/catalog';
 import { FACE_LEFT, FACE_RIGHT, attackStyleOf, type AttackStyle } from '../render/anim';
 import { PATTERN_LABEL, STAT_LABEL_GEN, STAT_SHORT, disabledEffect, effectParts, patternDescription, statDisabledTitle, turns, weaponPerkText } from '../data/labels';
-import type { CharacterBlueprint, EffectId, Stat } from '../data/types';
-import {
-  THRESHOLDS, canUseArtifact, createBattle, critOf, dodgeOf, patternOf, slotDamageValue, step, useArtifact, type BattleEvent, type BattleState, type Fighter, type Side,
-} from '../core/battle';
-import { generateOpponent, playerWeaponLevel, type OpponentBagEntry } from '../core/opponent';
-import { SERIES_LENGTH, seriesRetries, retriesLeft, surrenderRun, enemyLoot, finishFight, opponentDraws, takeLoot, type FightOutcome, type LootEntry, type SeriesReward } from '../core/arena';
+import type { EffectId, Stat } from '../data/types';
+import { THRESHOLDS, canUseArtifact, critOf, dodgeOf, patternOf, slotDamageValue, step, useArtifact, type BattleEvent, type BattleState, type Fighter, type Side } from '../core/battle';
+import { SERIES_LENGTH, seriesRetries, retriesLeft, surrenderRun, type FightOutcome, type LootEntry, type SeriesReward } from '../core/arena';
 import { CUBE_ID } from '../core/state';
-import { bagSlots, discardFromBag, itemOf } from '../core/character';
+import { bagSlots, itemOf } from '../core/character';
 import { crossButton } from '../ui/CrossButton';
 import { itemDescription, itemRows } from '../data/labels';
 import { enableSlotDrag } from '../ui/bagDrag';
-import type { EquipmentItem } from '../data/types';
 import { openRucksack } from '../ui/RucksackModal';
 import { store } from '../game/store';
-import { playerFighterInput } from './OpponentScene';
 import { Button } from '../ui/Button';
 import { createItemIcon } from '../ui/ItemIcon';
 import { Modal } from '../ui/Modal';
@@ -165,10 +161,14 @@ export class BattleScene extends BaseScene {
   /** Итог боя для серии (считается один раз). undefined — ещё не подведён, null — вне серии. */
   private outcome?: FightOutcome | null;
   /** Рюкзак и снаряжение противника — его лут. */
-  private enemyBag: OpponentBagEntry[] = [];
-  private enemyEquip: ReadonlyArray<EquipmentItem | null> = [];
   /** Лут побеждённого: забирается перетаскиванием в рюкзак, пока игрок на этом экране. */
-  private loot: LootEntry[] = [];
+  /** Лут побеждённого — в состоянии игрока (забирается действием lootTake). */
+  private get loot(): LootEntry[] {
+    return store.state.loot?.entries ?? [];
+  }
+  /** Сколько ходов сыграно и когда нажаты артефакты — ввод игрока, по которому сервер пересчитывает бой. */
+  private steps = 0;
+  private artifactUses: Array<{ after: number; slot: number }> = [];
   /** Последний удар был критом — его основной урон рисуется золотым. */
   private lastCrit = false;
   /** Удары, чья точка импакта ещё не наступила. */
@@ -211,16 +211,18 @@ export class BattleScene extends BaseScene {
       const firstText = this.children.list.findIndex((o) => o instanceof Phaser.GameObjects.Text);
       if (firstText >= 0) this.children.moveTo(this.layer3d.image, firstText);
     }
-    const me = playerFighterInput(c);
-    // тот же противник, что на экране «Новый противник»: seed + уровень оружия игрока
-    const myBp = getBlueprint(c.blueprintId) as CharacterBlueprint;
-    const runOpp = store.state.arenaRun?.opp;
-    const draws = opponentDraws(runOpp && runOpp.seed === this.data_.oppSeed ? runOpp : { seed: this.data_.oppSeed });
-    const opp = generateOpponent(this.data_.oppSeed, { level: this.data_.oppLevel ?? playerWeaponLevel(me.equipment), exactLevel: !!this.data_.oppExact, category: myBp.category, player: me, draws });
-    this.enemyBag = opp.bag;
-    this.enemyEquip = opp.equipment;
-    this.loot = [];
-    this.b = createBattle(this.data_.seed, me, opp);
+    // боец, противник и зерно боя — из состояния (их зафиксировал сервер): тот же бой он пересчитает сам
+    const made = createRunBattle(store.state);
+    if (!made) {
+      this.add.existing(this.stubNote(640, 360, 'Бой не начат', 'Вернись к противнику и нажми «В бой».'));
+      new Button(this, 640, 460, 'В меню', { width: 220, height: 52, onClick: () => this.go(SCENE.menu) });
+      return;
+    }
+    this.b = made.battle;
+    this.steps = 0;
+    this.artifactUses = [];
+    // ушли с экрана победы — незабранный лут пропадает
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => store.state.loot && store.act('lootClose'));
 
     this.turnText = text(this, GAME_W / 2, 106, 'ХОД 0', { kind: 'mono', size: 15, color: COLOR.light }).setOrigin(0.5, 0);
     this.sides = { player: this.buildSide(this.b.player), enemy: this.buildSide(this.b.enemy) };
@@ -383,6 +385,7 @@ export class BattleScene extends BaseScene {
     const actor = this.b.next;
     this.skipped = false;
     const events = step(this.b);
+    this.steps++;
     let delay = this.play(events);
     // стата отключилась — следующий ход ждёт, пока надпись провисит
     if (events.some((e) => e.t === 'disable')) delay += DISABLE_MS[this.speed];
@@ -391,6 +394,7 @@ export class BattleScene extends BaseScene {
       const k = this.queuedArtifact;
       this.queuedArtifact = null;
       const before = this.b.log.length;
+      this.artifactUses.push({ after: this.steps, slot: k });
       if (useArtifact(this.b, 'player', k)) {
         const evs = this.b.log.slice(before);
         // показать после удара этого хода
@@ -431,6 +435,7 @@ export class BattleScene extends BaseScene {
       this.push(`Артефакт сработает после твоего хода.`);
     } else {
       const before = this.b.log.length;
+      this.artifactUses.push({ after: this.steps, slot: k });
       useArtifact(this.b, 'player', k);
       this.play(this.b.log.slice(before));
     }
@@ -1006,20 +1011,13 @@ export class BattleScene extends BaseScene {
   /** Подвести итог боя в серии: поломки бойца, осколки, лут или потери. Один раз. */
   private settle() {
     if (this.outcome !== undefined || !this.b?.over) return;
-    const p = this.b.player;
-    const e = this.b.enemy;
-    const result = {
-      win: this.b.over!.winner === 'player',
-      brokenBlocks: p.blocks.filter((b) => !b.alive).map((b) => b.index),
-      enemyBroken: e.blocks.filter((b) => !b.alive).length,
-      seed: this.b.seed,
-    };
-    // итог считается здесь же (для окна результата) и тем же действием — в сторе и на сервере
-    const out = finishFight(store.state, result);
-    if (out) store.act('finishFight', result);
+    // на сервер уходит не итог, а ввод игрока: артефакты и ход, на котором он сдался или вышел;
+    // бой пересчитывается тем же кодом — здесь (для окна результата) и на сервере
+    const natural = this.b.log.some((ev) => ev.t === 'end');
+    const inputs: FightInputs = { artifacts: this.artifactUses, ...(natural ? {} : { stopAfter: this.steps }) };
+    const out = resolveFight(store.state, inputs);
+    if (out) store.act('finishFight', inputs);
     this.outcome = out;
-    // победа в серии: лут врага — его оружие, артефакты, рюкзак и осколки разбитых кубов
-    if (out && this.b.over.winner === 'player') this.loot = enemyLoot(this.enemyEquip, this.enemyBag, e.blocks.filter((b) => !b.alive).length);
   }
 
   /** Окно итога боя; можно закрыть и открыть снова бургером. */
@@ -1181,11 +1179,7 @@ export class BattleScene extends BaseScene {
     const take = (k: number, cell?: number) => {
       const e = this.loot[k];
       if (!e) return;
-      const res = takeLoot(store.state, this.data_.charUid, e, cell);
-      if (!res || !store.act('takeLoot', this.data_.charUid, e, cell)) return this.cameras.main.shake(100, 0.002);
-      const left = res.left;
-      if (left > 0) this.loot[k] = { ...e, count: left };
-      else this.loot.splice(k, 1);
+      if (!store.act('lootTake', k, cell)) return this.cameras.main.shake(100, 0.002);
       rerender();
     };
 
@@ -1215,10 +1209,7 @@ export class BattleScene extends BaseScene {
     y += 20;
     // выбросить из рюкзака — вещь ложится к луту врага: пока не ушёл с экрана, её можно забрать обратно
     const drop = (k: number) => {
-      const res = discardFromBag(store.state, this.data_.charUid, k);
-      if (!res || !store.act('discardFromBag', this.data_.charUid, k)) return;
-      const e = res.entry;
-      this.loot.push({ itemId: e.itemId, count: e.count, ...(e.level !== undefined ? { level: e.level } : {}), ...(e.cells !== undefined ? { cells: e.cells } : {}), ...(e.gems?.length ? { gems: e.gems } : {}) });
+      if (!store.act('lootDrop', k)) return;
       rerender();
     };
     const bagCells: Slot[] = [];
