@@ -71,20 +71,23 @@ const params = new URLSearchParams(typeof location === 'undefined' ? '' : locati
 const env = import.meta.env ?? {};
 const [paramHost, paramPort] = (params.get('server') ?? '').split(':');
 const envHost = env.VITE_NAKAMA_HOST as string | undefined;
-// Выложенная сборка, открытая с домена: сервер — тот же домен (Caddy отдаёт и клиент, и API), адрес в сборку не зашивается.
+// Выложенная сборка, открытая с домена: сервер — тот же адрес, что у страницы, вместе с папкой (игра на domain/ctg/ → API на
+// domain/ctg/v2); Caddy отдаёт и клиент, и API, адрес в сборку не зашивается.
 const page = typeof location === 'undefined' ? null : location;
 const sameOrigin =
   !paramHost && !envHost && !!env.PROD && !!page && /^https?:$/.test(page.protocol) && !/^(localhost|127\.0\.0\.1|\[::1\])$/.test(page.hostname);
 const pageSsl = page?.protocol === 'https:';
 const HOST = paramHost || envHost || (sameOrigin ? page!.hostname : '127.0.0.1');
 const PORT = paramPort || (paramHost ? '' : (env.VITE_NAKAMA_PORT as string | undefined)) || (sameOrigin ? page!.port || (pageSsl ? '443' : '80') : '7450');
+// папка страницы без завершающего «/»: '/ctg' для domain/ctg/, пусто — для корня
+const pagePath = sameOrigin ? page!.pathname.replace(/\/[^/]*$/, '') : '';
 const SSL = paramHost ? PORT === '443' : sameOrigin ? pageSsl : (env.VITE_NAKAMA_SSL as string | undefined) === 'true';
 const SERVER_KEY = (env.VITE_NAKAMA_KEY as string | undefined) || 'defaultkey';
 const PROFILE = params.get('profile') ?? '';
 const DEVICE_KEY = `ctg-net-device${PROFILE ? `:${PROFILE}` : ''}`;
 const NAME_KEY = `ctg-net-name${PROFILE ? `:${PROFILE}` : ''}`;
 
-export const SERVER_ADDRESS = `${HOST}:${PORT}`;
+export const SERVER_ADDRESS = `${HOST}:${PORT}${pagePath}`;
 
 const storage = (() => {
   try {
@@ -129,7 +132,8 @@ async function toNetError(e: unknown): Promise<NetError> {
 }
 
 class Net {
-  private readonly client = new Client(SERVER_KEY, HOST, PORT, SSL, 10000, false);
+  // nakama-js склеивает адрес как «хост:порт» — папка дописывается к порту
+  private readonly client = new Client(SERVER_KEY, HOST, `${PORT}${pagePath}`, SSL, 10000, false);
   private session: Session | null = null;
   private deviceId = read(DEVICE_KEY);
 
