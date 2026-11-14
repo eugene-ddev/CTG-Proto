@@ -208,7 +208,7 @@ describe('стартовый набор и «+ все предметы»', () =>
     for (const item of ITEMS) {
       if (item.id === 'cube') continue;
       const stacks = s.inventory.filter((e) => e.itemId === item.id);
-      const listed = START.inventory.find((e) => e.itemId === item.id)?.count;
+      const listed = START.allItemsCounts?.[item.id];
       expect(stacks.map((e) => e.count), item.id).toEqual([listed ?? maxStackOf(item.id)]);
     }
     for (const id of ['whetstone', 'parchment', 'jewelerKit']) expect(s.inventory.find((e) => e.itemId === id)?.count, id).toBe(10);
