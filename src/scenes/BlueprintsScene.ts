@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { PARCHMENT_ID, cubeCount, itemCount } from '../core/state';
-import { UNLOCK_COST, isUnlocked, unlockBlueprint } from '../core/craft';
+import { UNLOCK_COST, isUnlocked } from '../core/craft';
 import { Button } from '../ui/Button';
 import { Modal } from '../ui/Modal';
 import { isDragRelease } from '../ui/dragGuard';
@@ -195,7 +195,7 @@ export class BlueprintsScene extends BaseScene {
         width: 200, height: 48, size: 20,
         onClick: () => {
           m.close();
-          if (store.update((st) => unlockBlueprint(st, bp.id))) this.showTab(this.tab, this.page);
+          if (store.act('unlockBlueprint', bp.id)) this.showTab(this.tab, this.page);
         },
       }).setEnabled(have >= UNLOCK_COST),
     );

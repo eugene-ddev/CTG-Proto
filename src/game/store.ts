@@ -1,11 +1,14 @@
-// Единственный источник состояния игрока для сцен. Состояние приходит с сервера при входе (hydrate); любое изменение
-// рассылается подписчикам и отправляется на сервер (этап 1 сети: целиком, с номером ревизии — на этапе 2 заменится
-// действиями, которые сервер исполняет сам).
+// Единственный источник состояния игрока для сцен. Состояние приходит с сервера при входе (hydrate).
+// Изменить его можно только действием (store.act, список — core/actions.ts): действие исполняется сразу здесь
+// и уходит на сервер, который исполняет его сам над состоянием из базы и сверяет итог. Разошлись — берётся
+// состояние сервера.
 import { BLUEPRINTS, COMBAT, START, maxStackOf } from '../data/catalog';
 import type { ArenaRun } from '../core/arena';
 import { browserStorage, type KeyValueStorage } from '../core/save';
 import { SHARD_ID, SHARD_STACK, STATE_VERSION, addCubes, addItem, createInitialState, type PlayerState } from '../core/state';
-import { forfeitIfInBattle, lobbyRegen, setSeriesRetries } from '../core/arena';
+import { setSeriesRetries } from '../core/arena';
+import { applyAction, stateHash, type ActionArgs, type ActionCall, type ActionName } from '../core/actions';
+import { randomSeed } from '../core/rng';
 import { defaultCharacterName } from '../core/craft';
 import { buildOrder } from '../core/build';
 import { defaultCounts, nextStat } from '../core/stats';
@@ -14,17 +17,24 @@ import type { Stat } from '../data/types';
 
 type Listener = (state: PlayerState) => void;
 
-/** Состояние отправки на сервер: всё сохранено, идёт отправка, нет связи (повтор через несколько секунд). */
+/** Состояние отправки на сервер: всё подтверждено, идёт отправка, нет связи (повтор через несколько секунд). */
 export type SyncStatus = 'local' | 'saved' | 'saving' | 'error';
 
-/** Сервер для стора: отправка состояния и сброс. Реализация — net/client.ts; в тестах не подключается. */
+/** Ответ сервера на пачку действий. */
+export type ActResult =
+  | { ok: true; rev: number; hash: string }
+  /** rejected — действие отклонено сервером, conflict — ревизия устарела (игра в другой вкладке): берём состояние сервера. */
+  | { ok: false; reason: 'rejected' | 'conflict'; state: PlayerState; rev: number; action?: string };
+
+/** Сервер для стора. Реализация — net/client.ts; в тестах не подключается. */
 export interface Remote {
-  sync(state: PlayerState, rev: number): Promise<{ conflict: false; rev: number } | { conflict: true; state: PlayerState; rev: number }>;
+  act(rev: number, actions: ActionCall[]): Promise<ActResult>;
+  read(): Promise<{ state: PlayerState; rev: number; serverTime: number }>;
   reset(): Promise<{ state: PlayerState; rev: number }>;
 }
 
-const SYNC_DELAY_MS = 300;
-const SYNC_RETRY_MS = 3000;
+const SEND_DELAY_MS = 150;
+const SEND_RETRY_MS = 3000;
 
 const maxStack = (itemId: string) => maxStackOf(itemId);
 
@@ -38,10 +48,13 @@ class Store {
   private current: PlayerState;
   private remote: Remote | null = null;
   private rev = 0;
-  private dirty = false;
-  private sending = false;
+  /** Действия, ещё не подтверждённые сервером: sent первых уже в пути. */
+  private queue: ActionCall[] = [];
+  private sent = 0;
   private timer: ReturnType<typeof setTimeout> | null = null;
   private status: SyncStatus = 'local';
+  /** Часы сервера минус часы браузера, мс. */
+  private clockOffset = 0;
 
   constructor() {
     setSeriesRetries(this.debug.retries ?? null);
@@ -49,18 +62,34 @@ class Store {
     this.current = freshState();
   }
 
-  /**
-   * Состояние с сервера после входа. Перезагрузка посреди боя арены — поражение; кубы, починенные в лобби
-   * за время отсутствия, — на месте. Если от этого состояние изменилось — уходит на сервер.
-   */
-  hydrate(state: PlayerState, rev: number, remote: Remote) {
+  /** Состояние с сервера после входа. */
+  hydrate(view: { state: PlayerState; rev: number; serverTime: number }, remote: Remote) {
     this.remote = remote;
-    this.rev = rev;
-    const next = lobbyRegen(forfeitIfInBattle(migrate(state)), Date.now());
-    this.current = next;
+    // лимит повторов на сервере — из конфига: отладочное переопределение работает только без сервера
+    setSeriesRetries(null);
+    this.adopt(view);
+  }
+
+  /** Принять состояние сервера: неподтверждённые действия отбрасываются. */
+  private adopt(view: { state: PlayerState; rev: number; serverTime?: number }) {
+    this.queue = [];
+    this.sent = 0;
+    if (this.timer) clearTimeout(this.timer);
+    this.timer = null;
+    this.rev = view.rev;
+    if (view.serverTime !== undefined) this.clockOffset = view.serverTime - Date.now();
+    this.current = view.state;
     this.setStatus('saved');
-    if (JSON.stringify(next) !== JSON.stringify(state)) this.schedule();
-    this.listeners.forEach((l) => l(next));
+    this.listeners.forEach((l) => l(view.state));
+  }
+
+  /** Время сервера по оценке клиента, мс — для таймеров на экране и для действий. */
+  now(): number {
+    return Date.now() + this.clockOffset;
+  }
+
+  get online(): boolean {
+    return this.remote !== null;
   }
 
   get syncStatus(): SyncStatus {
@@ -78,53 +107,59 @@ class Store {
     this.statusListeners.forEach((l) => l(s));
   }
 
-  private schedule(delay = SYNC_DELAY_MS) {
-    if (!this.remote) return;
-    this.dirty = true;
-    this.setStatus(this.status === 'error' ? 'error' : 'saving');
-    if (this.timer) clearTimeout(this.timer);
-    this.timer = setTimeout(() => void this.flush(), delay);
-  }
-
-  /** Отправить состояние на сервер сейчас (один запрос за раз; изменения во время отправки уйдут следующим). */
-  async flush(): Promise<void> {
-    if (this.timer) clearTimeout(this.timer);
-    this.timer = null;
-    if (!this.remote || !this.dirty || this.sending) return;
-    this.sending = true;
-    this.dirty = false;
-    try {
-      const res = await this.remote.sync(this.current, this.rev);
-      this.rev = res.rev;
-      if (res.conflict) {
-        // на сервере более новое состояние (игра открыта в другой вкладке) — берём его
-        this.dirty = false;
-        this.current = res.state;
-        this.listeners.forEach((l) => l(res.state));
-      }
-      this.sending = false;
-      if (this.dirty) this.schedule(0);
-      else this.setStatus('saved');
-    } catch {
-      this.sending = false;
-      this.dirty = true;
-      this.setStatus('error');
-      this.timer = setTimeout(() => void this.flush(), SYNC_RETRY_MS);
-    }
-  }
-
   get state(): PlayerState {
     return this.current;
   }
 
-  /** Применить чистую операцию над состоянием. null из операции — изменение отклонено. */
-  update(fn: (s: PlayerState) => PlayerState | null): boolean {
-    const next = fn(this.current);
+  /**
+   * Выполнить действие (core/actions.ts): сразу здесь и следом на сервере. false — действие отклонено
+   * (условия не выполнены), состояние не изменилось.
+   */
+  act<K extends ActionName>(name: K, ...args: ActionArgs<K>): boolean {
+    const call: ActionCall = { name, args, now: this.now(), seed: randomSeed() };
+    const next = applyAction(this.current, name, args, call);
     if (!next) return false;
+    if (next === this.current) return true; // ничего не изменилось — серверу сообщать нечего
     this.current = next;
-    this.schedule();
+    if (this.remote) {
+      this.queue.push(call);
+      this.setStatus(this.status === 'error' ? 'error' : 'saving');
+      if (!this.sent && !this.timer) this.timer = setTimeout(() => void this.flush(), SEND_DELAY_MS);
+    }
     this.listeners.forEach((l) => l(next));
     return true;
+  }
+
+  /** Отправить накопленные действия сейчас (одна пачка за раз; сделанное за время отправки уйдёт следующей). */
+  async flush(): Promise<void> {
+    if (this.timer) clearTimeout(this.timer);
+    this.timer = null;
+    const remote = this.remote;
+    if (!remote || this.sent || !this.queue.length) return;
+    const batch = this.queue.slice();
+    this.sent = batch.length;
+    const expected = stateHash(this.current); // состояние после всех действий пачки
+    try {
+      const res = await remote.act(this.rev, batch);
+      if (!res.ok) {
+        console.warn(`[store] сервер не принял действия (${res.reason}${res.action ? `: ${res.action}` : ''}) — берём его состояние`);
+        return this.adopt(res);
+      }
+      this.rev = res.rev;
+      this.queue = this.queue.slice(batch.length);
+      this.sent = 0;
+      if (res.hash !== expected) {
+        // итог на сервере другой (часы, версия правил) — перечитать; действия, сделанные за это время, уже применены там или уйдут следом
+        console.warn('[store] состояние разошлось с сервером — перечитываю');
+        if (!this.queue.length) return this.adopt(await remote.read());
+      }
+      if (this.queue.length) void this.flush();
+      else this.setStatus('saved');
+    } catch {
+      this.sent = 0;
+      this.setStatus('error');
+      this.timer = setTimeout(() => void this.flush(), SEND_RETRY_MS);
+    }
   }
 
   /** Подписка; возвращает отписку. Сцены отписываются в SHUTDOWN. */
@@ -133,25 +168,15 @@ class Store {
     return () => this.listeners.delete(listener);
   }
 
-  /** Сброс прогресса: стартовое состояние выдаёт сервер (без сервера — локально). */
+  /** Сброс прогресса (отладка): стартовое состояние выдаёт сервер; без сервера — локально. */
   reset() {
     if (!this.remote) {
-      this.update(() => freshState());
+      this.current = freshState();
+      this.listeners.forEach((l) => l(this.current));
       return;
     }
-    if (this.timer) clearTimeout(this.timer);
-    this.timer = null;
-    this.dirty = false;
     this.setStatus('saving');
-    this.remote.reset().then(
-      (res) => {
-        this.rev = res.rev;
-        this.current = res.state;
-        this.setStatus('saved');
-        this.listeners.forEach((l) => l(res.state));
-      },
-      () => this.setStatus('error'),
-    );
+    this.remote.reset().then((res) => this.adopt(res), () => this.setStatus('error'));
   }
 
   /** Отладочные настройки (вкладка Debug) — отдельно от сейва, сброс прогресса их не трогает. */
@@ -165,6 +190,7 @@ class Store {
 
   /** Лимит повторов на серию (null — из конфига). Подписчики перерисовываются — счётчики повторов обновятся. */
   setRetries(n: number | null) {
+    if (this.remote) return; // на сервере лимит — из конфига
     setSeriesRetries(n);
     const { retries: _r, ...rest } = this.debug;
     const next: DebugSettings = n === null ? rest : { ...rest, retries: Math.max(0, Math.floor(n)) };

@@ -2,8 +2,8 @@ import { SERVER_ADDRESS, net } from '../net/client';
 import Phaser from 'phaser';
 import { BLUEPRINTS, BLUEPRINT_KIND_LABEL, EFFECTS, ITEMS, getItem } from '../data/catalog';
 import type { BlueprintKind } from '../data/types';
-import { addCubes, addItem, cubeCount, totalItemCount, type PlayerState } from '../core/state';
-import { SERIES_LENGTH, SERIES_RETRIES, activeCharacter, healFull, retriesLeft, seriesRetries } from '../core/arena';
+import { cubeCount, totalItemCount, type PlayerState } from '../core/state';
+import { SERIES_LENGTH, SERIES_RETRIES, activeCharacter, retriesLeft, seriesRetries } from '../core/arena';
 import { store } from '../game/store';
 import { text } from '../ui/text';
 import { COLOR, GAME_W, GAME_H } from '../ui/theme';
@@ -44,8 +44,8 @@ export class DebugScene extends Phaser.Scene {
     this.panel.add([bg, this.info]);
 
     const by = H - 34;
-    this.panel.add(this.chip(14, by, '+100 кубов', () => store.update((s) => addCubes(s, 100))).setOrigin(0, 0.5));
-    this.panel.add(this.chip(120, by, '+ все предметы', () => store.update(giveAllItems)).setOrigin(0, 0.5));
+    this.panel.add(this.chip(14, by, '+100 кубов', () => store.act('debugAddCubes', 100)).setOrigin(0, 0.5));
+    this.panel.add(this.chip(120, by, '+ все предметы', () => store.act('debugGiveAllItems')).setOrigin(0, 0.5));
     this.resetBtn = this.chip(W - 14, by, 'Сбросить', () => this.reset()).setOrigin(1, 0.5);
     this.panel.add(this.resetBtn);
 
@@ -112,7 +112,7 @@ export class DebugScene extends Phaser.Scene {
     const c = activeCharacter(s);
     // во время боя бойца держит BattleScene — итог боя перезапишет кубы, поэтому не лечим
     const note = !c ? 'нет бойца' : s.arenaRun?.inBattle && s.arenaRun.charUid === c.uid ? 'идёт бой' : !c.brokenBlocks.length ? 'и так цел' : '';
-    if (note || !store.update((st) => healFull(st, c!.uid))) {
+    if (note || !store.act('debugHeal', c!.uid)) {
       this.healNote.setText(note);
       this.time.delayedCall(1800, () => this.healNote.setText(''));
     }
@@ -170,6 +170,3 @@ export class DebugScene extends Phaser.Scene {
 }
 
 /** Чит: по одному каждому предмету со своим чертежом (снаряжение, камни, сумки). */
-function giveAllItems(s: PlayerState): PlayerState {
-  return ITEMS.filter((i) => i.blueprintId).reduce((acc, i) => addItem(acc, i.id, 1, store.maxStack(i.id)), s);
-}

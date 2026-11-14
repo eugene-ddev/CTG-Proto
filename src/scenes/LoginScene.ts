@@ -13,7 +13,8 @@ const NAME_MIN = 3;
 const NAME_MAX = 16;
 
 const remote: Remote = {
-  sync: (state, rev) => net.syncPlayer(state, rev),
+  act: (rev, actions) => net.act(rev, actions),
+  read: () => net.readPlayer(),
   reset: () => net.resetPlayer(),
 };
 
@@ -78,7 +79,7 @@ export class LoginScene extends BaseScene {
       if (net.hasSavedLogin && !this.form) new Button(this, GAME_W / 2, 420, 'Повторить', { width: 260, height: 52, size: 22, onClick: () => this.scene.restart() });
       return;
     }
-    store.hydrate(view.state, view.rev, remote);
+    store.hydrate(view, remote);
     this.go(SCENE.menu);
   }
 }

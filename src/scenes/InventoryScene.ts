@@ -3,19 +3,19 @@ import { isDragRelease } from '../ui/dragGuard';
 import { BaseScene } from './BaseScene';
 import { SCENE, type CharactersSceneData } from './keys';
 import { getBlueprint, getItem } from '../data/catalog';
-import { craftCost, disassembleItem, disassembleMany, disassemblyRefund, disassemblyRefundOf } from '../core/craft';
+import { craftCost, disassemblyRefund, disassemblyRefundOf } from '../core/craft';
 import { Modal } from '../ui/Modal';
-import { SHARDS_PER_CUBE, convertShards } from '../core/arena';
+import { SHARDS_PER_CUBE } from '../core/arena';
 import { itemDescription, itemRows } from '../data/labels';
 import { fillItemInfo } from '../ui/itemInfo';
 import { ScrollArea } from '../ui/ScrollArea';
 import type { Item, ItemKind } from '../data/types';
-import { addGemCell, cellInfo, gemInfo, upgradeInfo, upgradeWeapon, type UpgradeTarget } from '../core/upgrade';
+import { cellInfo, gemInfo, upgradeInfo, type UpgradeTarget } from '../core/upgrade';
 import { openGemPicker } from '../ui/GemPicker';
 import { withUpgrade } from '../ui/upgradeTip';
-import { SHARD_ID, itemCount, moveInventory, sortInventory, type InventoryEntry, type PlayerState } from '../core/state';
+import { SHARD_ID, itemCount, type InventoryEntry, type PlayerState } from '../core/state';
 import { enableSlotDrag } from '../ui/bagDrag';
-import { itemOf, takeFromBag, unequip, type SlotRef } from '../core/character';
+import { itemOf, type SlotRef } from '../core/character';
 import { store } from '../game/store';
 import { Button } from '../ui/Button';
 import { createItemIcon } from '../ui/ItemIcon';
@@ -35,7 +35,6 @@ const FILTERS: Array<[Filter, string]> = [
   ['bag', 'Сумки'],
   ['resource', 'Ресурсы'],
 ];
-const KIND_ORDER: ItemKind[] = ['resource', 'weapon', 'artifact', 'gem', 'potion', 'bag'];
 const FILTER_KEY = 'inventory.filter';
 const COLS = 9;
 const ROWS = 4;
@@ -60,12 +59,6 @@ interface ViewEntry extends InventoryEntry {
 function allEntries(s: PlayerState): ViewEntry[] {
   // только то, что лежит в инвентаре: надетое и содержимое рюкзаков видно в «Персонажах»
   return [...s.inventory];
-}
-
-/** Порядок «Сортировать»: по типу, затем по имени, полные стопки раньше. */
-function byKindAndName(a: InventoryEntry, b: InventoryEntry) {
-  const ia = getItem(a.itemId), ib = getItem(b.itemId);
-  return KIND_ORDER.indexOf(ia.kind) - KIND_ORDER.indexOf(ib.kind) || ia.name.localeCompare(ib.name, 'ru') || b.count - a.count;
 }
 
 export class InventoryScene extends BaseScene {
@@ -111,7 +104,7 @@ export class InventoryScene extends BaseScene {
     // свой порядок сбрасывается в «по типу и имени»
     const sortLink = text(this, list.innerW, 2, 'СОРТИРОВАТЬ', { size: 13, color: COLOR.inkQuiet, letterSpacing: 1 }).setOrigin(1, 0).setInteractive({ useHandCursor: true });
     sortLink.on('pointerover', () => sortLink.setColor(COLOR.ink)).on('pointerout', () => sortLink.setColor(COLOR.inkQuiet));
-    sortLink.on('pointerup', () => !isDragRelease(this) && store.update((st) => sortInventory(st, byKindAndName)));
+    sortLink.on('pointerup', () => !isDragRelease(this) && store.act('sortInventory'));
     list.content.add(sortLink);
     list.content.add(this.empty);
     this.pager = new Pager(this, list.innerW / 2, 44 + ROWS * (SLOT + GAP) + 14, (p) => this.setPage(p));
@@ -126,7 +119,7 @@ export class InventoryScene extends BaseScene {
     // осколки — дроп арены; перерабатываются в кубы
     const shardsText = text(this, 24, list.innerH - 22, '', { size: 14, color: COLOR.ink }).setOrigin(0, 0.5);
     list.content.add(shardsText);
-    const conv = new Button(this, list.innerW - 95, list.innerH - 22, 'В кубы', { variant: 'beige', width: 190, height: 42, size: 17, onClick: () => store.update(convertShards) });
+    const conv = new Button(this, list.innerW - 95, list.innerH - 22, 'В кубы', { variant: 'beige', width: 190, height: 42, size: 17, onClick: () => store.act('convertShards') });
     list.content.add(conv);
     // выбор нескольких предметов — разобрать разом
     this.multiBtn = new Button(this, list.innerW - 95 - 215, list.innerH - 22, 'Выбрать несколько', {
@@ -229,7 +222,7 @@ export class InventoryScene extends BaseScene {
       enableSlotDrag(this, cells, cells.map((_, i) => (pageEntries[i] ? getItem(pageEntries[i].itemId) : null)), SLOT - 18, (from, to) => {
         const a = pageEntries[from];
         if (!a) return;
-        store.update((st) => moveInventory(st, a.uid, pageEntries[to]?.uid ?? null, store.maxStack));
+        store.act('moveInventory', a.uid, pageEntries[to]?.uid ?? null);
       });
     }
 
@@ -251,10 +244,7 @@ export class InventoryScene extends BaseScene {
         height: 48,
         size: 20,
         onClick: () => {
-          store.update((s) => disassembleItem(s, uid, (id) => {
-            const bpId = getItem(id).blueprintId;
-            return bpId ? getBlueprint(bpId) : undefined;
-          }));
+          store.act('disassembleItem', uid);
           m.close();
         },
       }),
@@ -338,7 +328,7 @@ export class InventoryScene extends BaseScene {
         onClick: () => {
           const ids = [...this.picked];
           this.picked.clear();
-          store.update((s) => disassembleMany(s, ids, blueprintOf));
+          store.act('disassembleMany', ids);
           m.close();
         },
       }),
@@ -378,7 +368,7 @@ export class InventoryScene extends BaseScene {
       this.detailBody.add(
         new Button(this, w / 2, h - 74, inBag ? 'Вынуть в инвентарь' : 'Снять', {
           variant: 'beige', width: w, height: 40, size: 18,
-          onClick: () => store.update((st) => (inBag ? takeFromBag(st, where.charUid, where.bagCell!) : unequip(st, where.charUid, where.slot!))),
+          onClick: () => (inBag ? store.act('takeFromBag', where.charUid, where.bagCell!) : store.act('unequip', where.charUid, where.slot!)),
         }),
       );
       this.detailBody.add(
@@ -396,7 +386,7 @@ export class InventoryScene extends BaseScene {
       this.detailBody.add(
         new Button(this, bw / 2, h - 26, up.reason === 'max' ? 'Максимум' : `Прокачать · ${up.cost}`, {
           width: bw, height: 44, size: 16,
-          onClick: () => store.update((st) => upgradeWeapon(st, { kind: 'inv', uid: entry.uid })),
+          onClick: () => store.act('upgradeWeapon', { kind: 'inv', uid: entry.uid }),
         }).setEnabled(up.ok),
       );
       this.detailBody.add(
@@ -410,7 +400,7 @@ export class InventoryScene extends BaseScene {
         this.detailBody.add(
           new Button(this, w / 2, h - 76, cell.reason === 'max' ? `Ячеек ${cell.cells}/${cell.max} — максимум` : `Ячейка камня · 1 набор · ${cell.cells}/${cell.max}`, {
             variant: 'beige', width: w, height: 40, size: 15,
-            onClick: () => store.update((st) => addGemCell(st, { kind: 'inv', uid: entry.uid })),
+            onClick: () => store.act('addGemCell', { kind: 'inv', uid: entry.uid }),
           }).setEnabled(cell.ok),
         );
       }

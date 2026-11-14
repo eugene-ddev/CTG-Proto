@@ -1,6 +1,6 @@
 import { BaseScene } from './BaseScene';
 import type { CharacterState } from '../core/state';
-import { SERIES_LENGTH, activeCharacter, fullRegenIn, startRun } from '../core/arena';
+import { SERIES_LENGTH, activeCharacter, fullRegenIn } from '../core/arena';
 import { itemOf } from '../core/character';
 import { getBlueprint, hasBlueprint, itemModel } from '../data/catalog';
 import type { CharacterBlueprint } from '../data/types';
@@ -85,7 +85,7 @@ export class MainMenuScene extends BaseScene {
       }
       const r = st.arenaRun?.charUid === cur.uid ? st.arenaRun : null;
       const alive = cur.blockStats.length - cur.brokenBlocks.length;
-      const all = fullRegenIn(st, cur, Date.now());
+      const all = fullRegenIn(st, cur, store.now());
       const regen = cur.brokenBlocks.length && !r && all !== null ? ` · все через ${mmss(all)}` : '';
       info.setText(`${bp.name} · кубы ${alive}/${cur.blockStats.length}${regen}${r ? ` · бой ${r.fight}/${SERIES_LENGTH}` : ''}`);
       noRegen.setText(cur.brokenBlocks.length && r ? ' · не чинятся, пока на арене' : '');
@@ -103,7 +103,7 @@ export class MainMenuScene extends BaseScene {
       const k = chars.findIndex((x) => x.uid === c.uid);
       const pick = (d: number) => {
         const next = chars[(k + d + chars.length) % chars.length];
-        store.update((st) => ({ ...st, lastArenaCharacterId: next.uid }));
+        store.act('setActiveCharacter', next.uid);
         this.scene.restart();
       };
       new ArrowButton(this, cx - 250, 388, -1, () => pick(-1));
@@ -116,7 +116,7 @@ export class MainMenuScene extends BaseScene {
       onClick: () => {
         // активный боец сразу идёт к противнику; идёт серия — продолжаем её
         if (run) return this.go(SCENE.opponent, { charUid: run.charUid } satisfies OpponentSceneData);
-        store.update((st) => startRun(st, c.uid));
+        store.act('startRun', c.uid);
         this.go(SCENE.opponent, { charUid: c.uid } satisfies OpponentSceneData);
       },
     });

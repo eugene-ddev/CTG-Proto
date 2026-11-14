@@ -1,7 +1,6 @@
 import Phaser from 'phaser';
 import { loadFonts } from './ui/fonts';
 import { store } from './game/store';
-import { lobbyRegen } from './core/arena';
 import { GAME_W, GAME_H } from './ui/theme';
 import { BootScene } from './scenes/BootScene';
 import { LoginScene } from './scenes/LoginScene';
@@ -48,10 +47,7 @@ window.addEventListener('error', (e) => showError(`${e.message}\n${(e.error as E
 window.addEventListener('unhandledrejection', (e) => showError(`${(e.reason as Error)?.message ?? e.reason}\n${(e.reason as Error)?.stack ?? ''}`));
 
 // разбитые кубы бойцов вне арены восстанавливаются со временем; при закрытой игре — догоняются при загрузке
-setInterval(() => store.update((s) => {
-  const next = lobbyRegen(s, Date.now());
-  return next === s ? null : next;
-}), 1000);
+setInterval(() => store.online && store.act('tick'), 1000);
 
 // свёрнутая или закрываемая вкладка — отправить несохранённое на сервер сразу
 document.addEventListener('visibilitychange', () => document.visibilityState === 'hidden' && void store.flush());

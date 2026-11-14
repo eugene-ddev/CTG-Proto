@@ -2,10 +2,12 @@
 // Адрес сервера: ?server=host:port в адресе страницы, иначе VITE_NAKAMA_HOST / VITE_NAKAMA_PORT, иначе 127.0.0.1:7450.
 // ?profile=имя — отдельный игрок в том же браузере (свой device id): удобно проверять бои с игроками в двух вкладках.
 import { Client, type Session } from '@heroiclabs/nakama-js';
+import type { ActionCall } from '../core/actions';
 import type { PlayerState } from '../core/state';
+import type { ActResult } from '../game/store';
 
 /** Версия протокола клиент ↔ сервер: меняется вместе с несовместимыми изменениями RPC. */
-export const PROTOCOL_VERSION = 1;
+export const PROTOCOL_VERSION = 2;
 
 export interface PlayerView {
   state: PlayerState;
@@ -14,9 +16,10 @@ export interface PlayerView {
   server: string;
   protocol: number;
   shared: { proto: string; digest: string };
+  /** Сервер в режиме отладки: исполняет debug-действия и сброс. */
+  debug: boolean;
 }
 
-export type SyncResult = { conflict: false; rev: number; serverTime: number } | ({ conflict: true } & PlayerView);
 
 /** Ошибка с текстом для игрока. */
 export class NetError extends Error {
@@ -148,7 +151,7 @@ class Net {
   }
 
   readPlayer = () => this.rpc<PlayerView>('player/read', {});
-  syncPlayer = (state: PlayerState, rev: number) => this.rpc<SyncResult>('player/sync', { state, rev });
+  act = (rev: number, actions: ActionCall[]) => this.rpc<ActResult>('player/act', { rev, actions });
   resetPlayer = () => this.rpc<PlayerView>('player/reset', {});
 }
 

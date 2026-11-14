@@ -5,8 +5,8 @@ import { getBlueprint, getItem, hasItem } from '../data/catalog';
 import { STAT_LABEL_GEN, itemRows } from '../data/labels';
 import { withUpgrade } from './upgradeTip';
 import { STATS, type CharacterBlueprint, type Item } from '../data/types';
-import { drinkFromBag, equipFromBag, potionEffect, stowToBag } from '../core/arena';
-import { bagSlots, characterStats, discardFromBag, itemOf, moveInBag, requirementGap } from '../core/character';
+import { potionEffect } from '../core/arena';
+import { bagSlots, characterStats, itemOf, requirementGap } from '../core/character';
 import { enableSlotDrag } from './bagDrag';
 import { store } from '../game/store';
 import { Button } from './Button';
@@ -95,7 +95,7 @@ export function openRucksack(scene: Phaser.Scene, charUid: string, opts: { title
           // зелье пьётся сразу по клику, если есть что чинить; остальное — выбирается
           if (item?.kind === 'potion' && heal > 0) {
             pick = null;
-            if (!store.update((st) => drinkFromBag(st, charUid, k))) render();
+            if (!store.act('drinkPotion', charUid, { kind: 'bag', cell: k })) render();
             return;
           }
           pick = item ? { kind: 'bag', cell: k } : null;
@@ -109,7 +109,7 @@ export function openRucksack(scene: Phaser.Scene, charUid: string, opts: { title
       if (item && canDiscard) {
         crosses.push(crossButton(scene, cx + CELL / 2 - 7, cy - CELL / 2 + 7, () => confirmDiscard(scene, `${item.name}${e!.count > 1 ? ` ×${e!.count}` : ''}`, () => {
           pick = null;
-          store.update((st) => discardFromBag(st, charUid, k)?.state ?? null);
+          store.act('discardFromBag', charUid, k);
         }), 'Выбросить', 8));
       }
     });
@@ -117,7 +117,7 @@ export function openRucksack(scene: Phaser.Scene, charUid: string, opts: { title
     // перетаскивание между ячейками рюкзака
     enableSlotDrag(scene, bagCells, cells.map((e) => (e && hasItem(e.itemId) ? getItem(e.itemId) : null)), CELL - 22, (from, to) => {
       pick = null;
-      store.update((st) => moveInBag(st, charUid, from, to));
+      store.act('moveInBag', charUid, from, to);
     });
     if (cells.length) y += Math.ceil(cells.length / perRow) * (CELL + 10) + 4;
 
@@ -147,7 +147,7 @@ export function openRucksack(scene: Phaser.Scene, charUid: string, opts: { title
           const gap = requirementGap(item as Item, stats);
           targets.forEach(({ sl, k }, i) => {
             const name = sl.type === 'Hand' ? (sl.isLeftHand ? 'В левую руку' : 'В правую руку') : `В слот А${k - 1}`;
-            act(name, 100 + i * 214, () => store.update((s) => equipFromBag(s, charUid, cell, k)), gap <= 0);
+            act(name, 100 + i * 214, () => store.act('equipFromBag', charUid, cell, k), gap <= 0);
           });
           if (gap > 0) body.add(text(scene, 0, y + 50, `Не хватает ${gap} ${STAT_LABEL_GEN[(item as Extract<Item, { scalingStat: unknown }>).scalingStat]}.`, { size: 13, color: '#c0281e' }));
         }
@@ -159,7 +159,7 @@ export function openRucksack(scene: Phaser.Scene, charUid: string, opts: { title
         body.add(text(scene, 0, y, getItem(e.itemId).name, { kind: 'display', size: 20 }));
         y += 30;
         const free = cells.some((x) => !x);
-        act(free ? 'Убрать в рюкзак' : 'Рюкзак полон', 100, () => store.update((s) => stowToBag(s, charUid, slot)), free);
+        act(free ? 'Убрать в рюкзак' : 'Рюкзак полон', 100, () => store.act('stowToBag', charUid, slot), free);
       }
     } else {
       body.add(text(scene, 0, y + 6, `Клик по зелью — выпить. Клик по оружию — взять в руку; перетащи — переложить в другую ячейку.\nВыбери надетое — убрать в рюкзак.${canDiscard ? ' Крестик — выбросить.' : ''}`, { size: 13, color: COLOR.inkQuiet }));

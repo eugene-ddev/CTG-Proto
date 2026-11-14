@@ -3,7 +3,7 @@
 import Phaser from 'phaser';
 import { getItem } from '../data/catalog';
 import { itemDescription } from '../data/labels';
-import { gemInfo, insertGem, removeGem, type UpgradeTarget } from '../core/upgrade';
+import { gemInfo, type UpgradeTarget } from '../core/upgrade';
 import { store } from '../game/store';
 import { Button } from './Button';
 import { createItemIcon } from './ItemIcon';
@@ -23,10 +23,7 @@ export function openGemPicker(scene: Phaser.Scene, target: UpgradeTarget, cell: 
   const add = (o: Phaser.GameObjects.GameObject) => m.card.content.add(o);
   const w = m.card.innerW;
   const pick = (gemId: string | null) => {
-    store.update((st) => {
-      const cleared = current ? removeGem(st, target, cell) : st;
-      return cleared && gemId ? insertGem(cleared, target, gemId) : cleared;
-    });
+    store.act('setGem', target, cell, gemId, !!current);
     m.close();
   };
   add(text(scene, w / 2, 0, current ? `Сейчас: ${current.name}` : 'Камень из инвентаря — в эту ячейку', { size: 14, color: COLOR.inkQuiet }).setOrigin(0.5, 0));

@@ -9,9 +9,9 @@ import {
   THRESHOLDS, canUseArtifact, createBattle, critOf, dodgeOf, patternOf, slotDamageValue, step, useArtifact, type BattleEvent, type BattleState, type Fighter, type Side,
 } from '../core/battle';
 import { generateOpponent, playerWeaponLevel, type OpponentBagEntry } from '../core/opponent';
-import { SERIES_LENGTH, seriesRetries, retriesLeft, surrenderRun, endRun, enemyLoot, finishFight, opponentDraws, takeLoot, type FightOutcome, type LootEntry, type SeriesReward } from '../core/arena';
+import { SERIES_LENGTH, seriesRetries, retriesLeft, surrenderRun, enemyLoot, finishFight, opponentDraws, takeLoot, type FightOutcome, type LootEntry, type SeriesReward } from '../core/arena';
 import { CUBE_ID } from '../core/state';
-import { bagSlots, discardFromBag, itemOf, moveInBag } from '../core/character';
+import { bagSlots, discardFromBag, itemOf } from '../core/character';
 import { crossButton } from '../ui/CrossButton';
 import { itemDescription, itemRows } from '../data/labels';
 import { enableSlotDrag } from '../ui/bagDrag';
@@ -977,7 +977,7 @@ export class BattleScene extends BaseScene {
           if (!this.b.over) this.b.over = { winner: 'enemy', reason: 'death' };
           this.settle();
           // выход с арены — конец серии, повторы не тратятся
-          if (this.outcome?.retry) store.update((st) => surrenderRun(st)?.state ?? null);
+          if (this.outcome?.retry) store.act('surrenderRun');
           this.go(SCENE.menu);
         },
       }),
@@ -1008,16 +1008,15 @@ export class BattleScene extends BaseScene {
     if (this.outcome !== undefined || !this.b?.over) return;
     const p = this.b.player;
     const e = this.b.enemy;
-    let out: FightOutcome | null = null;
-    store.update((st) => {
-      out = finishFight(st, {
-        win: this.b.over!.winner === 'player',
-        brokenBlocks: p.blocks.filter((b) => !b.alive).map((b) => b.index),
-        enemyBroken: e.blocks.filter((b) => !b.alive).length,
-        seed: this.b.seed,
-      });
-      return out?.state ?? null;
-    });
+    const result = {
+      win: this.b.over!.winner === 'player',
+      brokenBlocks: p.blocks.filter((b) => !b.alive).map((b) => b.index),
+      enemyBroken: e.blocks.filter((b) => !b.alive).length,
+      seed: this.b.seed,
+    };
+    // итог считается здесь же (для окна результата) и тем же действием — в сторе и на сервере
+    const out = finishFight(store.state, result);
+    if (out) store.act('finishFight', result);
     this.outcome = out;
     // победа в серии: лут врага — его оружие, артефакты, рюкзак и осколки разбитых кубов
     if (out && this.b.over.winner === 'player') this.loot = enemyLoot(this.enemyEquip, this.enemyBag, e.blocks.filter((b) => !b.alive).length);
@@ -1099,7 +1098,7 @@ export class BattleScene extends BaseScene {
         new Button(this, w / 2 - 205, by, 'Забрать и выйти', {
           variant: 'beige', width: 190, height: 50, size: 17,
           onClick: () => {
-            store.update((st) => endRun(st));
+            store.act('endRun');
             this.go(SCENE.menu);
           },
         }),
@@ -1122,12 +1121,8 @@ export class BattleScene extends BaseScene {
         new Button(this, w / 2 - 105, by, 'Сдаться', {
           variant: 'beige', width: 190, height: 50, size: 20,
           onClick: () => {
-            let res: FightOutcome | null = null;
-            store.update((st) => {
-              res = surrenderRun(st);
-              return res?.state ?? null;
-            });
-            if (!res) return;
+            const res = surrenderRun(store.state);
+            if (!res || !store.act('surrenderRun')) return;
             this.outcome = res;
             this.surrenderedRun = true;
             rerender();
@@ -1186,13 +1181,9 @@ export class BattleScene extends BaseScene {
     const take = (k: number, cell?: number) => {
       const e = this.loot[k];
       if (!e) return;
-      let res: ReturnType<typeof takeLoot> = null;
-      store.update((st) => {
-        res = takeLoot(st, this.data_.charUid, e, cell);
-        return res?.state ?? null;
-      });
-      if (!res) return this.cameras.main.shake(100, 0.002);
-      const left = (res as { left: number }).left;
+      const res = takeLoot(store.state, this.data_.charUid, e, cell);
+      if (!res || !store.act('takeLoot', this.data_.charUid, e, cell)) return this.cameras.main.shake(100, 0.002);
+      const left = res.left;
       if (left > 0) this.loot[k] = { ...e, count: left };
       else this.loot.splice(k, 1);
       rerender();
@@ -1224,13 +1215,9 @@ export class BattleScene extends BaseScene {
     y += 20;
     // выбросить из рюкзака — вещь ложится к луту врага: пока не ушёл с экрана, её можно забрать обратно
     const drop = (k: number) => {
-      let res: ReturnType<typeof discardFromBag> = null;
-      store.update((st) => {
-        res = discardFromBag(st, this.data_.charUid, k);
-        return res?.state ?? null;
-      });
-      if (!res) return;
-      const e = (res as { entry: { itemId: string; count: number; level?: number; cells?: number; gems?: string[] } }).entry;
+      const res = discardFromBag(store.state, this.data_.charUid, k);
+      if (!res || !store.act('discardFromBag', this.data_.charUid, k)) return;
+      const e = res.entry;
       this.loot.push({ itemId: e.itemId, count: e.count, ...(e.level !== undefined ? { level: e.level } : {}), ...(e.cells !== undefined ? { cells: e.cells } : {}), ...(e.gems?.length ? { gems: e.gems } : {}) });
       rerender();
     };
@@ -1249,7 +1236,7 @@ export class BattleScene extends BaseScene {
     enableSlotDrag(this, lootCells, this.loot.map((e) => itemOf(e)), CELL - 18, (from, to) => take(from, to), bagCells);
     enableSlotDrag(this, bagCells, bag.map((e) => (e ? itemOf(e) : null)), CELL - 18, (from, to) => {
       if (to < bagCells.length) {
-        if (to !== from) store.update((st) => moveInBag(st, this.data_.charUid, from, to));
+        if (to !== from) store.act('moveInBag', this.data_.charUid, from, to);
       } else drop(from);
     }, [...bagCells, ...lootCells]);
     return y;

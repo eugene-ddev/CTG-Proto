@@ -12,7 +12,6 @@ import { SCENE, type SceneKey } from './keys';
 import { store } from '../game/store';
 import type { PlayerState } from '../core/state';
 import { panel, type Card } from '../ui/Panel';
-import { startRun } from '../core/arena';
 import { getBlueprint, getItem, hasItem } from '../data/catalog';
 import { Pager } from '../ui/Pager';
 import { VoxelView } from '../ui/VoxelView';
@@ -179,7 +178,7 @@ export abstract class BaseScene extends Phaser.Scene {
         width: 230,
         height: 52,
         onClick: () => {
-          store.update((st) => startRun(st, selected));
+          store.act('startRun', selected);
           this.go(SCENE.opponent, { charUid: selected } satisfies OpponentSceneData);
         },
       }),

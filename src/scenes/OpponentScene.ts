@@ -12,7 +12,7 @@ import { createItemIcon } from '../ui/ItemIcon';
 import { hintIcon } from '../ui/HintIcon';
 import { weaponRow } from '../ui/WeaponRow';
 import { THRESHOLDS, createFighter, critOf, cubesToDisable, digPreview, dodgeOf, hasAliveCube, normalizeTarget, perkOf, slotDamageValue, type Fighter } from '../core/battle';
-import { armorAbsorb, bagSlots, itemOf, setCharacterTarget } from '../core/character';
+import { armorAbsorb, bagSlots, itemOf } from '../core/character';
 import { generateOpponent, playerWeaponLevel, type Opponent } from '../core/opponent';
 import { randomSeed } from '../core/rng';
 import type { CharacterState } from '../core/state';
@@ -25,7 +25,7 @@ import { COLOR, GAME_W, STAT_COLOR } from '../ui/theme';
 import { modelView, type ModelView } from '../ui/modelView';
 import { Modal } from '../ui/Modal';
 import { openRucksack } from '../ui/RucksackModal';
-import { SERIES_LENGTH, seriesRetries, retriesLeft, endRun, markInBattle, opponentDraws, startRun } from '../core/arena';
+import { SERIES_LENGTH, seriesRetries, retriesLeft, opponentDraws } from '../core/arena';
 import { ARENA, getItem as itemById } from '../data/catalog';
 import { FACE_LEFT, FACE_RIGHT } from '../render/anim';
 
@@ -87,7 +87,7 @@ export class OpponentScene extends BaseScene {
   }
 
   create() {
-    if (store.state.characters.some((x) => x.uid === this.charUid)) store.update((st) => startRun(st, this.charUid));
+    if (store.state.characters.some((x) => x.uid === this.charUid)) store.act('startRun', this.charUid);
     const c = store.state.characters.find((x) => x.uid === this.charUid);
     const run = store.state.arenaRun;
     // экран подготовки к бою — без табов главного меню: выход — кнопкой слева внизу
@@ -157,7 +157,7 @@ export class OpponentScene extends BaseScene {
       height: 60,
       size: 32,
       onClick: () => {
-        store.update(markInBattle);
+        store.act('markInBattle');
         this.go(SCENE.battle, { charUid: c.uid, oppSeed: opp.seed, oppLevel: opp.level, oppExact: 'exact' in opp && !!opp.exact, seed: randomSeed() } satisfies BattleSceneData);
       },
     });
@@ -167,7 +167,7 @@ export class OpponentScene extends BaseScene {
   private leaveRun() {
     const run = store.state.arenaRun;
     if (!run?.wins) {
-      store.update((st) => endRun(st));
+      store.act('endRun');
       return this.go(SCENE.menu);
     }
     const m = new Modal(this, { title: 'Завершить серию?', width: 520, height: 290 });
@@ -182,7 +182,7 @@ export class OpponentScene extends BaseScene {
         height: 48,
         size: 18,
         onClick: () => {
-          store.update((st) => endRun(st));
+          store.act('endRun');
           this.go(SCENE.menu);
         },
       }),
@@ -490,7 +490,7 @@ export class OpponentScene extends BaseScene {
         this.input.setDefaultCursor('default');
         this.tweens.add({ targets: box, x: slotX(order.indexOf(s)), duration: 120, ease: 'Cubic.easeOut' });
         layout(s);
-        store.update((st) => setCharacterTarget(st, c.uid, [...order]));
+        store.act('setTarget', c.uid, [...order]);
       });
     });
     this.updatePreview(order);

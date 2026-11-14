@@ -471,7 +471,7 @@ export class CraftScene extends BaseScene {
       return;
     }
     this.done = true;
-    store.update(() => r.state);
+    store.act('craft', { blueprintId: bp.id, manual, variantKey: this.variant?.key, blockStats, count });
     this.cameras.main.flash(180, 255, 236, 180);
     const result = r.result;
     this.time.delayedCall(250, () => this.showResult(result, manual, blockStats, count));
@@ -602,7 +602,7 @@ export class CraftScene extends BaseScene {
     if (!c) return;
     const next = applyCharacterEdit(store.state, c.uid, this.cells);
     if (!next) return this.cameras.main.shake(120, 0.003);
-    store.update(() => next);
+    store.act('editCharacter', c.uid, [...this.cells]);
     this.cameras.main.flash(180, 255, 236, 180);
     this.time.delayedCall(200, () => this.go(SCENE.characters, { charUid: c.uid } satisfies CharactersSceneData));
   }
@@ -655,7 +655,7 @@ export class CraftScene extends BaseScene {
         width: 160, height: 48, size: 20,
         onClick: () => {
           const next = applyTarget(store.state, target, result.itemId);
-          if (next) store.update(() => next);
+          if (next) store.act('craftToTarget', target, result.itemId);
           this.setCraftTarget(null);
           toChars(target.charUid);
         },
