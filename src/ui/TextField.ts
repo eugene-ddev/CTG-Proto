@@ -19,8 +19,9 @@ export interface TextFieldOpts {
 export const isTyping = (scene: Phaser.Scene) => scene.data?.get('typing') === true;
 
 /**
- * Однострочное поле ввода на Phaser (без DOM): клик — фокус, печать с клавиатуры,
- * Backspace, Enter / ESC / клик мимо — снять фокус. Кириллица — через event.key.
+ * Однострочное поле ввода: рисуется на Phaser, а текст набирается в скрытом настоящем <input> поверх поля —
+ * только так в телефоне открывается экранная клавиатура, и работают автозамена, свайп-набор и Android
+ * (у него в keydown часто key = 'Unidentified'). Клик — фокус, Enter / ESC / клик мимо — снять фокус.
  * Позиция (x, y) — левый верхний угол.
  */
 export class TextField extends Phaser.GameObjects.Container {
@@ -30,6 +31,7 @@ export class TextField extends Phaser.GameObjects.Container {
   private readonly caret: Phaser.GameObjects.Rectangle;
   private readonly frame: Phaser.GameObjects.Graphics;
   private blink?: Phaser.Time.TimerEvent;
+  private readonly domInput: HTMLInputElement | null;
 
   constructor(scene: Phaser.Scene, x: number, y: number, private opts: TextFieldOpts) {
     super(scene, x, y);
@@ -43,19 +45,22 @@ export class TextField extends Phaser.GameObjects.Container {
     this.add([this.label, this.caret, this.frame, hit]);
     this.setSize(opts.width, h);
 
+    this.domInput = typeof document === 'undefined' ? null : this.createInput();
+    // фокус настоящему полю — прямо в обработчике нажатия: иначе мобильный браузер не откроет клавиатуру
+    // (и повторно — по отпусканию: iOS открывает клавиатуру не на каждом событии)
     hit.on('pointerdown', (_p: Phaser.Input.Pointer, _x: number, _y: number, ev: Phaser.Types.Input.EventData) => {
       ev.stopPropagation();
       this.focus();
     });
-    const onKey = (e: KeyboardEvent) => this.key(e);
+    hit.on('pointerup', () => this.focused && this.focusInput());
     const onDown = () => this.blur();
-    scene.input.keyboard?.on('keydown', onKey);
     scene.input.on('pointerdown', onDown);
     this.once(Phaser.GameObjects.Events.DESTROY, () => {
-      scene.input.keyboard?.off('keydown', onKey);
       scene.input.off('pointerdown', onDown);
       this.blink?.remove();
       if (this.focused) scene.data.set('typing', false);
+      this.focused = false;
+      this.domInput?.remove();
     });
     this.render();
     scene.add.existing(this);
@@ -67,11 +72,13 @@ export class TextField extends Phaser.GameObjects.Container {
 
   setValue(v: string) {
     this.value = v.slice(0, this.opts.maxLength ?? 64);
+    if (this.domInput) this.domInput.value = this.value;
     this.render();
     return this;
   }
 
   focus() {
+    this.focusInput();
     if (this.focused) return;
     this.focused = true;
     this.scene.data.set('typing', true);
@@ -89,23 +96,85 @@ export class TextField extends Phaser.GameObjects.Container {
       if (scene.sys.isActive()) scene.data.set('typing', false);
     });
     this.blink?.remove();
+    this.domInput?.blur();
     this.render();
     this.opts.onBlur?.(this.value);
   }
 
-  private key(e: KeyboardEvent) {
-    if (!this.focused) return;
-    if (e.key === 'Enter') {
-      this.opts.onSubmit?.(this.value);
-      return this.blur();
+  private createInput(): HTMLInputElement {
+    const el = document.createElement('input');
+    el.type = 'text';
+    el.maxLength = this.opts.maxLength ?? 64;
+    el.value = this.value;
+    el.autocomplete = 'off';
+    el.spellcheck = false;
+    el.setAttribute('autocapitalize', 'off');
+    el.setAttribute('enterkeyhint', 'done');
+    el.setAttribute('aria-label', this.opts.placeholder ?? '');
+    // невидимое, клики не перехватывает; 16px — иначе iOS увеличивает страницу при фокусе
+    Object.assign(el.style, {
+      position: 'fixed',
+      left: '0px',
+      top: '0px',
+      width: '1px',
+      height: '1px',
+      opacity: '0',
+      border: '0',
+      padding: '0',
+      fontSize: '16px',
+      pointerEvents: 'none',
+      zIndex: '-1',
+    });
+    el.addEventListener('input', () => {
+      const v = el.value.slice(0, this.opts.maxLength ?? 64);
+      if (v !== el.value) el.value = v;
+      if (v === this.value) return;
+      this.value = v;
+      this.opts.onChange?.(this.value);
+      this.render();
+    });
+    // клавиши поля не доходят до сцены (горячие клавиши, захваченные Phaser клавиши вроде ESC в окне)
+    el.addEventListener('keydown', (e) => {
+      e.stopPropagation();
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        this.opts.onSubmit?.(this.value);
+        this.blur();
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        this.blur();
+      }
+    });
+    el.addEventListener('keyup', (e) => e.stopPropagation());
+    // клавиатура закрыта системой (iOS «Готово», переход в другое окно)
+    el.addEventListener('blur', () => {
+      if (this.focused && document.activeElement !== el) this.blur();
+    });
+    document.body.appendChild(el);
+    return el;
+  }
+
+  /** Настоящее поле — под нарисованным (страница прокручивается к нему, когда открывается клавиатура). */
+  private focusInput() {
+    const el = this.domInput;
+    if (!el || !this.scene) return;
+    const canvas = this.scene.game.canvas;
+    const rect = canvas.getBoundingClientRect();
+    const k = rect.width / this.scene.scale.gameSize.width;
+    const m = this.getWorldTransformMatrix();
+    el.style.left = `${Math.round(rect.left + m.tx * k)}px`;
+    el.style.top = `${Math.round(rect.top + m.ty * k)}px`;
+    el.style.width = `${Math.max(1, Math.round(this.width * k))}px`;
+    el.style.height = `${Math.max(1, Math.round(this.height * k))}px`;
+    if (el.value !== this.value) el.value = this.value;
+    if (document.activeElement !== el) el.focus({ preventScroll: true });
+    // курсор — в конец
+    const end = el.value.length;
+    try {
+      el.setSelectionRange(end, end);
+    } catch {
+      /* не все типы полей поддерживают выделение */
     }
-    if (e.key === 'Escape') return this.blur();
-    if (e.key === 'Backspace') this.value = this.value.slice(0, -1);
-    else if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && this.value.length < (this.opts.maxLength ?? 64)) this.value += e.key;
-    else return;
-    e.preventDefault();
-    this.opts.onChange?.(this.value);
-    this.render();
   }
 
   private render() {

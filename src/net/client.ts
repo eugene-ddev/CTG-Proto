@@ -2,11 +2,37 @@
 // Адрес сервера: ?server=host:port в адресе страницы (порт 443 — по HTTPS), иначе VITE_NAKAMA_HOST / _PORT / _SSL,
 // иначе для выложенной сборки — домен самой страницы, иначе 127.0.0.1:7450.
 // ?profile=имя — отдельный игрок в том же браузере (свой device id): удобно проверять бои с игроками в двух вкладках.
-import { Client, type Session } from '@heroiclabs/nakama-js';
+import { Client, Session } from '@heroiclabs/nakama-js';
 import type { ActionCall } from '../core/actions';
 import type { ArenaProfile, FighterSnapshot } from '../core/arena';
 import type { PlayerState } from '../core/state';
 import type { ActResult } from '../game/store';
+
+/**
+ * Разбор токена сессии. nakama-js 2.8.0 декодирует JWT обычным atob: выкидывает «-» и «_» из base64url и читает байты
+ * как latin-1, поэтому токен с не-латинским именем (и изредка с любым) не разбирается — вход падает после того,
+ * как сервер уже создал игрока. Здесь — base64url и UTF-8.
+ */
+const jwtPayload = (token: string, what: string): Record<string, unknown> => {
+  const parts = token.split('.');
+  if (parts.length !== 3) throw new Error(`${what} is not valid.`);
+  const b64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+  const bin = atob(b64 + '='.repeat((4 - (b64.length % 4)) % 4));
+  return JSON.parse(new TextDecoder().decode(Uint8Array.from(bin, (c) => c.charCodeAt(0)))) as Record<string, unknown>;
+};
+type SessionFields = { token: string; refresh_token: string; expires_at: number; refresh_expires_at: number; username: string; user_id: string; vars: unknown };
+(Session.prototype as unknown as { update(token: string, refreshToken: string): void }).update = function (this: SessionFields, token: string, refreshToken: string) {
+  const data = jwtPayload(token, 'jwt');
+  if (refreshToken) {
+    this.refresh_expires_at = Math.floor(Number(jwtPayload(refreshToken, 'refresh jwt').exp));
+    this.refresh_token = refreshToken;
+  }
+  this.token = token;
+  this.expires_at = Math.floor(Number(data.exp));
+  this.username = data.usn as string;
+  this.user_id = data.uid as string;
+  this.vars = data.vrs;
+};
 
 /** Версия протокола клиент ↔ сервер: меняется вместе с несовместимыми изменениями RPC. */
 export const PROTOCOL_VERSION = 5;
