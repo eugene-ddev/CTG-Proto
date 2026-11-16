@@ -15,6 +15,9 @@ export interface TextFieldOpts {
   onBlur?: (value: string) => void;
 }
 
+/** Сенсорный экран без мыши (телефон, планшет). */
+const coarsePointer = () => typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
+
 /** Сцены с открытым полем ввода: ESC и горячие клавиши сцены не должны срабатывать. */
 export const isTyping = (scene: Phaser.Scene) => scene.data?.get('typing') === true;
 
@@ -31,6 +34,8 @@ export class TextField extends Phaser.GameObjects.Container {
   private readonly caret: Phaser.GameObjects.Rectangle;
   private readonly frame: Phaser.GameObjects.Graphics;
   private blink?: Phaser.Time.TimerEvent;
+  /** Перефокус настоящего поля: его blur — не потеря фокуса. */
+  private refocusing = false;
   private readonly domInput: HTMLInputElement | null;
 
   constructor(scene: Phaser.Scene, x: number, y: number, private opts: TextFieldOpts) {
@@ -46,13 +51,16 @@ export class TextField extends Phaser.GameObjects.Container {
     this.setSize(opts.width, h);
 
     this.domInput = typeof document === 'undefined' ? null : this.createInput();
-    // фокус настоящему полю — прямо в обработчике нажатия: иначе мобильный браузер не откроет клавиатуру
-    // (и повторно — по отпусканию: iOS открывает клавиатуру не на каждом событии)
-    hit.on('pointerdown', (_p: Phaser.Input.Pointer, _x: number, _y: number, ev: Phaser.Types.Input.EventData) => {
+    // фокус настоящему полю — прямо в обработчике нажатия, иначе мобильный браузер не откроет клавиатуру.
+    // iOS открывает её только из touchend/click: на касании фокус — по отпусканию, мышью — сразу.
+    hit.on('pointerdown', (p: Phaser.Input.Pointer, _x: number, _y: number, ev: Phaser.Types.Input.EventData) => {
       ev.stopPropagation();
-      this.focus();
+      this.markFocused();
+      if (!p.wasTouch) this.focusInput(true);
     });
-    hit.on('pointerup', () => this.focused && this.focusInput());
+    hit.on('pointerup', (p: Phaser.Input.Pointer) => {
+      if (p.wasTouch && this.focused) this.focusInput(true);
+    });
     const onDown = () => this.blur();
     scene.input.on('pointerdown', onDown);
     this.once(Phaser.GameObjects.Events.DESTROY, () => {
@@ -77,8 +85,16 @@ export class TextField extends Phaser.GameObjects.Container {
     return this;
   }
 
+  /**
+   * Фокус из кода (не по нажатию): на телефоне только рисуем фокус — фокус настоящему полю вне жеста
+   * клавиатуру не открывает, а iOS после такого фокуса не открывает её и по следующему тапу.
+   */
   focus() {
-    this.focusInput();
+    this.markFocused();
+    if (!coarsePointer()) this.focusInput(false);
+  }
+
+  private markFocused() {
     if (this.focused) return;
     this.focused = true;
     this.scene.data.set('typing', true);
@@ -148,14 +164,18 @@ export class TextField extends Phaser.GameObjects.Container {
     el.addEventListener('keyup', (e) => e.stopPropagation());
     // клавиатура закрыта системой (iOS «Готово», переход в другое окно)
     el.addEventListener('blur', () => {
-      if (this.focused && document.activeElement !== el) this.blur();
+      if (!this.refocusing && this.focused && document.activeElement !== el) this.blur();
     });
     document.body.appendChild(el);
     return el;
   }
 
-  /** Настоящее поле — под нарисованным (страница прокручивается к нему, когда открывается клавиатура). */
-  private focusInput() {
+  /**
+   * Настоящее поле — под нарисованным (страница прокручивается к нему, когда открывается клавиатура).
+   * force — вызов из жеста: если поле уже в фокусе (поставлен без клавиатуры), фокус ставится заново,
+   * иначе iOS клавиатуру не покажет.
+   */
+  private focusInput(force: boolean) {
     const el = this.domInput;
     if (!el || !this.scene) return;
     const canvas = this.scene.game.canvas;
@@ -167,6 +187,11 @@ export class TextField extends Phaser.GameObjects.Container {
     el.style.width = `${Math.max(1, Math.round(this.width * k))}px`;
     el.style.height = `${Math.max(1, Math.round(this.height * k))}px`;
     if (el.value !== this.value) el.value = this.value;
+    if (document.activeElement === el && force) {
+      this.refocusing = true;
+      el.blur();
+      this.refocusing = false;
+    }
     if (document.activeElement !== el) el.focus({ preventScroll: true });
     // курсор — в конец
     const end = el.value.length;
