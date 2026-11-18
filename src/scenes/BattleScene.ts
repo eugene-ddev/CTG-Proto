@@ -28,6 +28,7 @@ import { COLOR, DEPTH, GAME_H, GAME_W, STAT_COLOR } from '../ui/theme';
 import { VoxelView, type BlockLook } from '../ui/VoxelView';
 import { Battle3DLayer, webglAvailable } from '../render3d/Battle3DLayer';
 import type { AttackCtx, Fighter3D } from '../render3d/Fighter3D';
+import { canUseFullscreen } from '../mobile';
 import { shade } from '../render/iso';
 
 /** Пауза между ходами, мс (TurnDelay клиента — 0.35 с; в прототипе медленнее, чтобы успеть рассмотреть). */
@@ -249,8 +250,8 @@ export class BattleScene extends BaseScene {
     // скорость боя — кнопкой справа внизу (над меткой DEBUG); то же переключается в меню паузы
     this.speedBtn = new Button(this, GAME_W - 16 - 78, GAME_H - 72, '', { variant: 'beige', width: 156, height: 44, size: 18, onClick: () => this.toggleSpeed() });
     this.speedBtn.setCaption(this.speedCaption());
-    // остальные кнопки — в меню-бургере справа сверху
-    const burger = new Button(this, GAME_W - 44, 44, '', { variant: 'beige', width: 56, height: 50, onClick: () => this.pause() });
+    // остальные кнопки — в меню-бургере справа сверху; на тачскрине левее иконки fullscreen
+    const burger = new Button(this, GAME_W - (canUseFullscreen() ? 96 : 44), 44, '', { variant: 'beige', width: 56, height: 50, onClick: () => this.pause() });
     const lines = this.add.graphics();
     lines.fillStyle(0x4a2a12, 1);
     for (const dy of [-10, -2, 6]) lines.fillRoundedRect(-13, dy - 2, 26, 4, 2);

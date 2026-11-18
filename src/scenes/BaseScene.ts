@@ -8,6 +8,7 @@ import { Modal } from '../ui/Modal';
 import { isTyping } from '../ui/TextField';
 import { text } from '../ui/text';
 import { COLOR, GAME_W } from '../ui/theme';
+import { canUseFullscreen, toggleFullscreen } from '../mobile';
 import { SCENE, type SceneKey } from './keys';
 import { store } from '../game/store';
 import type { PlayerState } from '../core/state';
@@ -80,6 +81,23 @@ export abstract class BaseScene extends Phaser.Scene {
         // открытая модалка сама обработает ESC
         if (!this.children.list.some((c) => c instanceof Modal) && !isTyping(this)) this.go(back);
       });
+    }
+    if (canUseFullscreen()) {
+      const icon = this.add.graphics().setPosition(GAME_W - 24, 46).setDepth(2);
+      const draw = (color: number) => {
+        icon.clear().lineStyle(3, color, 1);
+        for (const [x1, y1, x2, y2] of [
+          [-12, -5, -12, -12], [-12, -12, -5, -12],
+          [5, -12, 12, -12], [12, -12, 12, -5],
+          [-12, 5, -12, 12], [-12, 12, -5, 12],
+          [12, 5, 12, 12], [5, 12, 12, 12],
+        ]) icon.lineBetween(x1, y1, x2, y2);
+      };
+      draw(0xa9a7a2);
+      const hit = this.add.zone(GAME_W - 24, 46, 44, 44).setInteractive({ useHandCursor: true }).setDepth(2);
+      hit.on('pointerover', () => draw(COLOR.highlight));
+      hit.on('pointerout', () => draw(0xa9a7a2));
+      hit.on('pointerup', () => { if (!isDragRelease(this)) void toggleFullscreen(); });
     }
   }
 

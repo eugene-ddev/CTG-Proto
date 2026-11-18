@@ -16,6 +16,7 @@ import { BattleScene } from './scenes/BattleScene';
 import { UiKitScene } from './scenes/UiKitScene';
 import { DebugScene } from './scenes/DebugScene';
 import { ModelsScene } from './scenes/ModelsScene';
+import { setupMobile } from './mobile';
 
 await loadFonts();
 
@@ -28,6 +29,8 @@ const game = new Phaser.Game({
   scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
   scene: [BootScene, LoginScene, MainMenuScene, InventoryScene, BlueprintsScene, CraftScene, CharactersScene, OpponentScene, RivalsScene, LeaderboardScene, BattleScene, UiKitScene, ModelsScene, DebugScene], // Debug последней — рисуется поверх
 });
+
+setupMobile(game);
 
 // доступ из консоли браузера для отладки
 Object.assign(window, { __game: game, __store: store });

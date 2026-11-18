@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { isDragRelease } from './dragGuard';
+import { isDragRelease, setDragging } from './dragGuard';
 import { panel, dottedLine } from './Panel';
 import { text } from './text';
 import { COLOR, DEPTH, GAME_W, GAME_H } from './theme';
@@ -153,15 +153,80 @@ export class Tooltip {
   }
 }
 
-/** Показывать тултип при наведении на интерактивный объект. null — не показывать. */
+const TOUCH_HOLD_MS = 500;
+const TOUCH_MOVE_PX = 14;
+
+/** На мыши — по наведению, на тачскрине — по удержанию. null — не показывать. */
 export function attachTooltip(target: Phaser.GameObjects.GameObject, content: () => TooltipContent | null) {
   const scene = target.scene;
-  const move = (p: Phaser.Input.Pointer) => {
+  let press: { id: number; x: number; y: number; shown: boolean } | null = null;
+  let timer: Phaser.Time.TimerEvent | undefined;
+
+  const cancelTimer = () => {
+    timer?.remove(false);
+    timer = undefined;
+  };
+  const cancelPress = () => {
+    cancelTimer();
+    press = null;
+  };
+  const show = (p: Phaser.Input.Pointer) => {
     if (isDragRelease(scene)) return; // идёт перетаскивание — без всплывашек
     const c = content();
     if (c) Tooltip.for(scene).show(c, p.x, p.y);
   };
-  target.on('pointerover', move);
+  const down = (p: Phaser.Input.Pointer) => {
+    if (!p.wasTouch || press) return;
+    Tooltip.for(scene).hide();
+    press = { id: p.id, x: p.x, y: p.y, shown: false };
+    timer = scene.time.delayedCall(TOUCH_HOLD_MS, () => {
+      timer = undefined;
+      if (!press || press.id !== p.id || !p.isDown || isDragRelease(scene)) return cancelPress();
+      const c = content();
+      if (!c) return cancelPress();
+      press.shown = true;
+      // Все клики в UI проверяют dragGuard: отпускание после чтения подсказки действие не выполняет.
+      setDragging(scene, true);
+      Tooltip.for(scene).show(c, p.x, p.y);
+    });
+  };
+  const move = (p: Phaser.Input.Pointer) => {
+    if (!p.wasTouch) return show(p);
+    if (!press || p.id !== press.id || press.shown) return;
+    if (Math.hypot(p.x - press.x, p.y - press.y) > TOUCH_MOVE_PX) cancelPress();
+  };
+  const out = (p: Phaser.Input.Pointer) => {
+    if (!p.wasTouch) return Tooltip.for(scene).hide();
+    if (press && p.id === press.id && !press.shown) cancelPress();
+  };
+  const release = (p: Phaser.Input.Pointer) => {
+    if (!press || p.id !== press.id) return;
+    const shown = press.shown;
+    cancelPress();
+    if (!shown) return;
+    Tooltip.for(scene).hide();
+    // GameObject pointerup идёт раньше глобального: клик уже подавлен. Снимаем флаг после всех его обработчиков.
+    scene.time.delayedCall(0, () => setDragging(scene, false));
+  };
+  const dragstart = () => {
+    if (press && !press.shown) cancelPress();
+  };
+
+  target.on('pointerover', (p: Phaser.Input.Pointer) => { if (!p.wasTouch) show(p); });
+  target.on('pointerdown', down);
   target.on('pointermove', move);
-  target.on('pointerout', () => Tooltip.for(scene).hide());
+  target.on('pointerout', out);
+  target.on('dragstart', dragstart);
+  scene.input.on('pointerup', release);
+  scene.input.on('pointerupoutside', release);
+  target.once(Phaser.GameObjects.Events.DESTROY, () => {
+    const shown = press?.shown;
+    cancelPress();
+    scene.input.off('pointerup', release);
+    scene.input.off('pointerupoutside', release);
+    if (shown) {
+      Tooltip.for(scene).hide();
+      setDragging(scene, false);
+    }
+  });
 }
