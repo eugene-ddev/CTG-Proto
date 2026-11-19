@@ -112,16 +112,16 @@ GEMS = [  # id, название, описание, эффект, вариант
 STAT_NOM = {'Armor': 'Броня', 'Strength': 'Сила', 'Dexterity': 'Ловкость', 'Intelligence': 'Интеллект', 'Stamina': 'Выносливость', 'Luck': 'Удача'}
 STAT_TINT = {'Armor': '#4a4a4a', 'Strength': '#d6090c', 'Dexterity': '#fec903', 'Intelligence': '#1182ee', 'Stamina': '#05e716', 'Luck': '#ff7000'}
 BAGS = {
-    'rucksack': dict(name='Рюкзак', description='Лут и зелья на арене — 6 ячеек', slot='Rucksack', capacity=6, unused=False),
+    'rucksack': dict(name='Рюкзак', description='Лут и снаряжение на арене — 6 ячеек', slot='Rucksack', capacity=6, unused=False),
     # подсумок — стартовый рюкзак на 3 ячейки (надевается в слот рюкзака); отдельного слота подсумка нет
-    'pouch': dict(name='Подсумок', description='Лут и зелья на арене — 3 ячейки', slot='Rucksack', capacity=3, unused=False),
+    'pouch': dict(name='Подсумок', description='Лут и снаряжение на арене — 3 ячейки', slot='Rucksack', capacity=3, unused=False),
 }
 # Рюкзаки побольше — своих моделей в Unity нет; модели всех сумок и оружия — в tools/models.py.
 EXTRA_RUCKSACKS = [
     dict(id='rucksackLarge', bp='bp-rucksack-large', name='Большой рюкзак', capacity=12,
-         description='Лут и зелья на арене — 12 ячеек'),
+         description='Лут и снаряжение на арене — 12 ячеек'),
     dict(id='rucksackHuge', bp='bp-rucksack-huge', name='Походный рюкзак', capacity=18,
-         description='Лут и зелья на арене — 18 ячеек'),
+         description='Лут и снаряжение на арене — 18 ячеек'),
 ]
 
 # Эффекты — по таблице «Стихийные эффекты» в доке (черновые значения), длительности в ходах носителя
@@ -137,11 +137,9 @@ EFFECTS = {
 }
 POTION_STATS = [('Armor', 'брони', 'Black'), ('Strength', 'силы', 'Red'), ('Dexterity', 'ловкости', 'Yellow'),
                 ('Intelligence', 'интеллекта', 'Blue'), ('Stamina', 'выносливости', 'Green'), ('Luck', 'удачи', 'Orange')]
-# Открытые с начала чертежи: варан, меч, малый флакон, подсумок. Остальные открываются чистым пергаментом.
+# Открытые с начала чертежи: варан и меч. Зелья и рюкзак встроены в персонажа и не собираются.
 START = dict(cubes=300, unlockAllBlueprints=False,
-             blueprints=['bp-waran', 'bp-sword', 'bp-potion-vial', 'bp-pouch'], inventory=[
-    dict(itemId='restoreStrengthVial', count=5), dict(itemId='restoreArmorVial', count=5),
-    dict(itemId='restoreDexterityVial', count=5)])
+             blueprints=['bp-waran', 'bp-sword'], inventory=[])
 
 
 def weapon_base_name(title):
@@ -235,7 +233,7 @@ def main():
     # Зелья: два чертежа — малый и большой флакон. Стата (цвет жидкости) выбирается при крафте,
     # каждая стата — отдельный предмет. Геометрия — с красного флакона, жидкость помечена tinted.
     LIQUID = {'#d6090c'}
-    for tier, title, amount, blocks_title in (('Vial', 'Малый флакон', 1, 'малый'), ('Flask', 'Большой флакон', 3, 'большой')):
+    for tier, title, amount, blocks_title in (('Vial', 'Малый флакон', 3, 'малый'), ('Flask', 'Большой флакон', 5, 'большой')):
         bp_id = f'bp-potion-{tier.lower()}'
         blocks = item_blocks(potions_geo[f'RedRestore{tier}'])
         for b in blocks:

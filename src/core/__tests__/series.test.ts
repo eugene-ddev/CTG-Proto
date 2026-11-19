@@ -3,10 +3,10 @@ import { ARENA, BLUEPRINTS, START, getBlueprint, maxStackOf } from '../../data/c
 import type { CharacterBlueprint, Stat } from '../../data/types';
 import { SERIES_LENGTH, finishFight, markInBattle, opponentDraws, rollSeriesReward, seriesBotLevel, startRun } from '../arena';
 import { generateOpponent } from '../opponent';
-import { equip } from '../character';
+import { bagSlots, equip } from '../character';
 import { completeCraft } from '../craft';
 import { PARCHMENT_ID, WHETSTONE_ID, addItem, createInitialState, cubeCount, itemCount, type PlayerState } from '../state';
-import { JEWELER_ID, MAX_WEAPON_LEVEL, addGemCell, cellInfo, upgradeCost, upgradeInfo, upgradeWeapon } from '../upgrade';
+import { JEWELER_ID, MAX_WEAPON_LEVEL, addGemCell, cellInfo, upgradeCost, upgradeInfo, upgradePotion, upgradeRucksack, upgradeWeapon } from '../upgrade';
 
 const lobster = getBlueprint('bp-lobster') as CharacterBlueprint;
 const stats38 = (): Stat[] => [...Array(13).fill('Strength'), ...Array(13).fill('Dexterity'), ...Array(12).fill('Stamina')];
@@ -51,10 +51,12 @@ describe('серия арены: длина и награда', () => {
     expect(cubeCount(out.state)).toBe(cubeCount(s));
   });
 
-  it('награда: 100 кубов + точильные камни 1–5 (~65%), пергамент (~10%), ювелирный набор (~10%) или камень стихии (~15%)', () => {
+  it('награда: 100 кубов + точильные камни 1–5 (~45%), пергамент, один из трёх наборов или камень стихии', () => {
     let stones = 0;
     let parch = 0;
     let kits = 0;
+    let alchemist = 0;
+    let leatherworker = 0;
     let gems = 0;
     for (let seed = 1; seed <= 4000; seed++) {
       const r = rollSeriesReward(seed);
@@ -71,16 +73,22 @@ describe('серия арены: длина и награда', () => {
       } else if (e.itemId === JEWELER_ID) {
         expect(e.count).toBe(1);
         kits++;
+      } else if (e.itemId === 'alchemistKit' || e.itemId === 'leatherworkerKit') {
+        expect(e.count).toBe(1);
+        if (e.itemId === 'alchemistKit') alchemist++;
+        else leatherworker++;
       } else {
         expect(['fireGem', 'iceGem', 'poisonGem']).toContain(e.itemId);
         expect(e.count).toBe(1);
         gems++;
       }
     }
-    expect(stones / 4000).toBeGreaterThan(0.62);
+    expect(stones / 4000).toBeGreaterThan(0.42);
     expect(gems / 4000).toBeGreaterThan(0.12);
     expect(parch / 4000).toBeGreaterThan(0.07);
     expect(kits / 4000).toBeGreaterThan(0.07);
+    expect(alchemist / 4000).toBeGreaterThan(0.07);
+    expect(leatherworker / 4000).toBeGreaterThan(0.07);
   });
 });
 
@@ -115,11 +123,33 @@ describe('прокачка оружия за точильные камни', () 
     const maxed = { ...s, characters: s.characters.map((c) => ({ ...c, equipment: c.equipment.map((e, i) => (i === 0 && e ? { ...e, level: MAX_WEAPON_LEVEL } : e)) })) };
     expect(MAX_WEAPON_LEVEL).toBe(3);
     expect(upgradeInfo(maxed, eq)).toMatchObject({ ok: false, reason: 'max' });
-    const potion = s.inventory.find((e) => e.itemId.startsWith('restore'))!;
-    expect(upgradeInfo(s, { kind: 'inv', uid: potion.uid })).toMatchObject({ ok: false, reason: 'notWeapon' });
+    const resource = s.inventory.find((e) => e.itemId === 'cube')!;
+    expect(upgradeInfo(s, { kind: 'inv', uid: resource.uid })).toMatchObject({ ok: false, reason: 'notWeapon' });
     expect(upgradeCost(1)).toBe(10);
     expect(upgradeCost(2)).toBe(25);
     expect(upgradeCost(3)).toBe(Infinity);
+  });
+});
+
+describe('наборы алхимика и кожевника', () => {
+  it('один набор — один уровень; зелье наполняется, другие зелья не меняются; рюкзак 3 → 6 → 12 → 18', () => {
+    let { s, uid } = ready();
+    expect(upgradePotion(s, uid, 'Strength')).toBeNull();
+    expect(upgradeRucksack(s, uid)).toBeNull();
+    s = addItem(s, 'alchemistKit', 1, 100);
+    s = { ...s, characters: [{ ...s.characters[0], potions: { ...s.characters[0].potions, Strength: { level: 1, charges: 0 } } }] };
+    s = upgradePotion(s, uid, 'Strength')!;
+    expect(s.characters[0].potions.Strength).toEqual({ level: 2, charges: 5 });
+    expect(s.characters[0].potions.Armor).toEqual({ level: 1, charges: 5 });
+    expect(itemCount(s, 'alchemistKit')).toBe(0);
+    expect(upgradePotion(s, uid, 'Strength')).toBeNull();
+    s = addItem(s, 'leatherworkerKit', 3, 100);
+    for (const capacity of [6, 12, 18]) {
+      s = upgradeRucksack(s, uid)!;
+      expect(bagSlots(s.characters[0])).toHaveLength(capacity);
+    }
+    expect(itemCount(s, 'leatherworkerKit')).toBe(0);
+    expect(upgradeRucksack(s, uid)).toBeNull();
   });
 });
 

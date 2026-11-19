@@ -62,7 +62,7 @@ describe('генерация ботов', () => {
     expect(withArt).toBeGreaterThan(0);
   });
 
-  it('рюкзак: содержимое влезает, зелья — стопками до максимума, оружие — главной статы', () => {
+  it('рюкзак: содержимое влезает, только запасное оружие главной статы; зелий в луте нет', () => {
     let bags = 0;
     for (let seed = 1; seed < 200; seed++) {
       const o = generateOpponent(seed, { level: 5 });
@@ -75,11 +75,7 @@ describe('генерация ботов', () => {
       expect(cap.kind).toBe('bag');
       expect(o.bag.length).toBeLessThanOrEqual(cap.kind === 'bag' ? cap.capacity : 0);
       const main = o.equipment.find((e) => e?.kind === 'weapon')!.scalingStat;
-      for (const e of o.bag) {
-        const it = getItem(e.itemId);
-        if (it.kind === 'potion') expect(e.count).toBeLessThanOrEqual(it.maxStack);
-        else expect(it).toMatchObject({ kind: 'weapon', scalingStat: main });
-      }
+      for (const e of o.bag) expect(getItem(e.itemId)).toMatchObject({ kind: 'weapon', scalingStat: main });
     }
     expect(bags).toBeGreaterThan(0);
   });

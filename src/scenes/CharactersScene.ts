@@ -10,14 +10,15 @@ import type { CraftTarget } from '../core/craftTarget';
 import { BaseScene } from './BaseScene';
 import { SCENE, type CharactersSceneData, type CraftSceneData } from './keys';
 import { editLocked } from '../core/edit';
-import { getBlueprint, getItem, hasItem } from '../data/catalog';
-import { NAME_MAX, bagAccepts, bagSlots, characterRefund, characterStats, requirementGap, slotAccepts, slotDamage, slotLabel, moveEquipped, moveInBag, validName, type CharacterStats, type SlotRef } from '../core/character';
-import type { CharacterState, PlayerState } from '../core/state';
+import { COMBAT, getBlueprint, getItem, hasItem } from '../data/catalog';
+import { NAME_MAX, bagAccepts, bagSlots, characterRefund, characterStats, requirementGap, rucksackItemId, slotAccepts, slotDamage, slotLabel, moveEquipped, moveInBag, validName, type CharacterStats, type SlotRef } from '../core/character';
+import { potionItemOf, type CharacterState, type PlayerState } from '../core/state';
 import type { BlueprintKind, CharacterBlueprint, Item, Stat } from '../data/types';
 import { STATS } from '../data/types';
 import { STAT_LABEL, STAT_LABEL_GEN, itemRows } from '../data/labels';
+import { skinColorOf, skinPatternOf } from '../data/skins';
 import { store } from '../game/store';
-import { cellInfo, gemInfo, upgradeInfo, type UpgradeTarget } from '../core/upgrade';
+import { cellInfo, gemInfo, potionUpgradeInfo, rucksackUpgradeInfo, upgradeInfo, type UpgradeTarget } from '../core/upgrade';
 import { openGemPicker } from '../ui/GemPicker';
 import { hintIcon } from '../ui/HintIcon';
 import { weaponRow } from '../ui/WeaponRow';
@@ -26,7 +27,7 @@ import { Button } from '../ui/Button';
 import { createItemIcon } from '../ui/ItemIcon';
 import { Modal } from '../ui/Modal';
 import { openRucksack } from '../ui/RucksackModal';
-import { LOBBY_REGEN_MS, activeCharacter, fullRegenIn, equipFromBag, inRun, nextRegenIn, potionSources, repairCost, stowToBagCell } from '../core/arena';
+import { LOBBY_REGEN_MS, activeCharacter, fullRegenIn, equipFromBag, inRun, nextRegenIn, repairCost, stowToBagCell } from '../core/arena';
 
 /** Слоты артефактов пока скрыты в интерфейсе: артефакты не проработаны (боты — без маны). */
 export const HIDE_ARTIFACT_SLOTS = true;
@@ -43,6 +44,7 @@ const duration = (ms: number) => {
 };
 import { Card, dottedLine, panel } from '../ui/Panel';
 import { Pager } from '../ui/Pager';
+import { potionBelt, potionBeltHeight } from '../ui/PotionBelt';
 import { Slot } from '../ui/Slot';
 import { TextField } from '../ui/TextField';
 import { text } from '../ui/text';
@@ -57,7 +59,7 @@ const SELECTED_KEY = 'characters.selected';
 const MODEL_YAW = 180;
 
 /** Выбор в правой колонке. */
-type Sel = { kind: 'slot'; ref: SlotRef } | { kind: 'bag'; cell: number } | { kind: 'preset'; slot: number };
+type Sel = { kind: 'slot'; ref: SlotRef } | { kind: 'bag'; cell: number } | { kind: 'potion'; stat: Stat } | { kind: 'preset'; slot: number };
 const sameSel = (a: Sel | null, b: Sel) => !!a && JSON.stringify(a) === JSON.stringify(b);
 const LIST_PAGE = 4;
 
@@ -85,7 +87,6 @@ export class CharactersScene extends BaseScene {
   /** uid выбранного персонажа; null — персонажей нет. */
   private selected: string | null = null;
   private listPage = 0;
-  private hint?: Phaser.GameObjects.Text;
   /** Что показано в правой колонке: предмет в ячейке, пресет; null — сведения о бойце. */
   private sel: Sel | null = null;
   /** Ячейка пресета, к которой относится кнопка «Применить / Сохранить». */
@@ -184,7 +185,7 @@ export class CharactersScene extends BaseScene {
       row.add(panel(this, 0, 0, w, 66, selected ? 'light' : 'beige'));
       if (selected) row.add(this.add.graphics().lineStyle(3, 0x4a2a12, 1).strokeRoundedRect(1, 1, w - 2, 64, 8));
       // превью целиком; разбитые кубы — значок ремонта (в лобби чинятся сами, в серии арены — нет)
-      row.add(new VoxelView(this, 40, 33, { blocks: bp.blocks, width: 64, height: 52, maxBlockPx: 8, yaw: MODEL_YAW, colorOf: (i) => STAT_COLOR[c.blockStats[i]] }));
+      row.add(new VoxelView(this, 40, 33, { blocks: bp.blocks, width: 64, height: 52, maxBlockPx: 8, yaw: MODEL_YAW, colorOf: (i) => skinColorOf(c.blueprintId, c.skinId, i) ?? STAT_COLOR[c.blockStats[i]], pattern: skinPatternOf(c.blueprintId, c.skinId) }));
       if (c.brokenBlocks.length) {
         const repairing = !inRun(s, c.uid);
         const badge = this.add.container(66, 12);
@@ -200,7 +201,7 @@ export class CharactersScene extends BaseScene {
         row.add(check);
       }
       row.add(text(this, 82, 10, c.name, { kind: 'display', size: 19 }));
-      const gear = c.equipment.filter(Boolean).length + (c.rucksack ? 1 : 0);
+      const gear = c.equipment.filter(Boolean).length;
       row.add(text(this, 82, 38, `${bp.name} · ${c.blockStats.length - c.brokenBlocks.length}/${c.blockStats.length} куб. · снаряжение ${gear}`, { size: 12, color: COLOR.inkQuiet }));
       const hit = this.add.zone(0, 0, w, 66).setOrigin(0).setInteractive({ useHandCursor: true }).on('pointerup', () => !isDragRelease(this) && this.select(c.uid));
       if (c === active) attachTooltip(hit, () => ({ title: `${c.name} · активный`, note: 'Этот боец идёт в бой с главного экрана.' }));
@@ -229,7 +230,6 @@ export class CharactersScene extends BaseScene {
   private renderRight(s: PlayerState) {
     Tooltip.for(this).hide(); // объект под курсором пересоздаётся — старая подсказка устарела
     this.body.removeAll(true);
-    this.hint = undefined;
     const c = s.characters.find((x) => x.uid === this.selected);
     if (!c) return this.renderEmpty();
     this.renderCharacter(c);
@@ -257,7 +257,7 @@ export class CharactersScene extends BaseScene {
     const bp = getBlueprint(c.blueprintId) as CharacterBlueprint;
     const stats = characterStats(bp, c.blockStats, c.brokenBlocks);
     const itemOf = (it: { itemId: string; level?: number } | null) => (it && hasItem(it.itemId) ? resolveItem(it) : null);
-    const gear: Gear = { charUid: c.uid, bp, stats, itemAt: (slot) => itemOf(slot === 'rucksack' ? c.rucksack : c.equipment[slot] ?? null) };
+    const gear: Gear = { charUid: c.uid, bp, stats, itemAt: (slot) => slot === 'rucksack' ? getItem(rucksackItemId(c)) : itemOf(c.equipment[slot] ?? null) };
     // выбранная ячейка опустела (сняли, выпили) — снова сведения о бойце
     if (this.sel && !this.selItem(c, gear) && this.sel.kind !== 'preset') this.sel = null;
     // клик по пустому месту карточки — сбросить выбор (зона под всем остальным)
@@ -295,7 +295,7 @@ export class CharactersScene extends BaseScene {
     head.once(Phaser.GameObjects.Events.DESTROY, () => tick.remove());
     const view = this.renderModelColumn(bp, c.blockStats, c.brokenBlocks, c.name, undefined, (v) => {
       if (validName(v) && validName(v) !== c.name) store.act('renameCharacter', c.uid, v);
-    });
+    }, c.skinId);
     // куб, который чинится в лобби сейчас: обводка и кольцо прогресса
     view.setFocusBlock(() => {
       const st = store.state;
@@ -323,8 +323,22 @@ export class CharactersScene extends BaseScene {
     this.body.add(new Button(this, 110, by + 50, 'Разобрать', { variant: 'beige', width: 220, height: 40, size: 17, onClick: () => this.confirmCharacterDisassembly(c, refund) }));
   }
 
+  /** Пояс над пресетами: ячейки размером с ячейки рюкзака, клик — сведения и прокачка справа. */
+  private renderPotions(c: CharacterState, x: number, y: number) {
+    const size = 40;
+    const gap = 4;
+    this.body.add(text(this, x, y, 'ЗЕЛЬЯ', { size: 12, color: COLOR.inkQuiet, letterSpacing: 1 }));
+    this.body.add(potionBelt(this, c, x, y + 22, undefined, {
+      size,
+      gap,
+      selected: this.sel?.kind === 'potion' ? this.sel.stat : null,
+      onSelect: (stat) => this.toggleSel({ kind: 'potion', stat }),
+    }));
+    return potionBeltHeight(size) + 30;
+  }
+
   /** Левая колонка: модель в цветах стат со слотами, имя, сведения о чертеже. */
-  private renderModelColumn(bp: CharacterBlueprint, blockStats: readonly Stat[], broken: readonly number[], name: string, onChange?: (v: string) => void, onBlur?: (v: string) => void) {
+  private renderModelColumn(bp: CharacterBlueprint, blockStats: readonly Stat[], broken: readonly number[], name: string, onChange?: (v: string) => void, onBlur?: (v: string) => void, skinId?: string) {
     const view = modelView(this, 110, 124, {
       blocks: bp.blocks,
       width: 220,
@@ -333,10 +347,11 @@ export class CharactersScene extends BaseScene {
       interactive: true,
       rotatable: false,
       yaw: MODEL_YAW, // повёрнут на 180° вправо (решение Евгения); стрелки «перёд» нет
-      colorOf: (i) => STAT_COLOR[blockStats[i]],
+      colorOf: (i) => skinColorOf(bp.id, skinId, i) ?? STAT_COLOR[blockStats[i]],
+      pattern: skinPatternOf(bp.id, skinId),
       lookOf: broken.length ? (i) => (broken.includes(i) ? 'ghost' : 'solid') : undefined,
       // разбитый куб — силуэт цвета своей статы
-      ghostColor: (i) => STAT_COLOR[blockStats[i]],
+      ghostColor: (i) => skinColorOf(bp.id, skinId, i) ?? STAT_COLOR[blockStats[i]],
     });
     this.body.add(view);
     if (broken.length) this.body.add(text(this, 110, 226, 'Клик по разбитому кубу — починить зельем', { size: 11, color: COLOR.ink }).setOrigin(0.5, 0));
@@ -346,7 +361,7 @@ export class CharactersScene extends BaseScene {
     return view;
   }
 
-  /** «Починить всё» за кубы — по цене флаконов; на арене нельзя (там чинят только зелья из рюкзака). */
+  /** «Починить всё» за кубы — по цене флаконов; на арене нельзя (там чинят встроенные зелья). */
   private renderRepairAll(c: CharacterState) {
     if (!c.brokenBlocks.length) return;
     const cost = repairCost(c);
@@ -359,7 +374,7 @@ export class CharactersScene extends BaseScene {
     attachTooltip(btn.hit, () => ({
       title: 'Починить всё за кубы',
       rows: [['Разбито', String(c.brokenBlocks.length)], ['Цена', `${cost} куб.`], ['Есть', `${cubeCount(store.state)} куб.`]],
-      note: arena ? 'На арене кубы чинятся только зельями из рюкзака.' : 'Цена — как собрать флаконы на починку: малый чинит 1 куб, большой — 3; берётся самый дешёвый набор.',
+      note: arena ? 'На арене кубы чинятся только встроенными зельями.' : 'Цена — по моделям флаконов: малый чинит 3 куба, большой — 5; берётся самый дешёвый набор.',
     }));
     this.body.add(btn);
   }
@@ -383,8 +398,8 @@ export class CharactersScene extends BaseScene {
     }));
     this.body.add(btn);
     view.on('blockclick', (i: number) => {
-      // разбитый куб — починить зельем его статы (или скрафтить зелье)
-      if (store.state.characters.find((x) => x.uid === c.uid)?.brokenBlocks.includes(i)) this.openRepairPicker(c.uid, i);
+      const cur = store.state.characters.find((x) => x.uid === c.uid);
+      if (cur?.brokenBlocks.includes(i)) store.act('drinkPotion', c.uid, cur.blockStats[i], i);
     });
   }
 
@@ -394,6 +409,7 @@ export class CharactersScene extends BaseScene {
   private selItem(c: CharacterState, gear: Gear): Item | null {
     const sl = this.sel;
     if (!sl || sl.kind === 'preset') return null;
+    if (sl.kind === 'potion') return potionItemOf(c, sl.stat);
     if (sl.kind === 'slot') return gear.itemAt(sl.ref);
     const e = bagSlots(c)[sl.cell];
     return e ? resolveItem(e) : null;
@@ -428,8 +444,11 @@ export class CharactersScene extends BaseScene {
         const slot = new Slot(this, cx, y, {
           size,
           label,
-          tooltip: () => (item ? this.itemTooltip(item, gear.stats, 'Клик — сведения справа') : { title: slotLabel(bp, ref), note: `${this.slotHint(ref, bp)} Клик — выбрать из инвентаря.` }),
+          tooltip: () => ref === 'rucksack'
+            ? { title: `Рюкзак · ${bagSlots(c).length} ячеек`, note: 'Постоянная часть персонажа. Клик — сведения и прокачка справа.' }
+            : item ? this.itemTooltip(item, gear.stats, 'Клик — сведения справа') : { title: slotLabel(bp, ref), note: `${this.slotHint(ref, bp)} Клик — выбрать из инвентаря.` },
           onClick: () => {
+            if (ref === 'rucksack') return this.toggleSel({ kind: 'slot', ref });
             if (item) return this.toggleSel({ kind: 'slot', ref });
             // в серии арены снаряжение меняется только из рюкзака
             if (inRun(store.state, c.uid)) return openRucksack(this, c.uid, { note: 'Боец в серии арены: снаряжение меняется только между боями, из рюкзака.' });
@@ -437,14 +456,14 @@ export class CharactersScene extends BaseScene {
           },
         });
         if (item) slot.setContent(createItemIcon(this, item, size - 24)).setItemGems(item);
-        slot.setSelected(sameSel(this.sel, { kind: 'slot', ref }));
+        slot.setSelected(ref !== 'rucksack' && sameSel(this.sel, { kind: 'slot', ref }));
         this.body.add(slot);
         if (ref !== 'rucksack') {
           dragSlots.push(slot);
           dragRefs.push(ref);
           dragItems.push(item ?? null);
+          if (item) this.quickRemove(cx + size / 2 - 9, y - size / 2 + 9, c.uid, () => store.act('unequip', c.uid, ref), 'Снять в инвентарь');
         }
-        if (item) this.quickRemove(cx + size / 2 - 9, y - size / 2 + 9, c.uid, () => store.act('unequip', c.uid, ref), ref === 'rucksack' && c.bag.some(Boolean) ? 'Снять рюкзак (содержимое — в инвентарь)' : 'Снять в инвентарь');
       });
     placeRow([...hands, 'rucksack'], 50 + size / 2);
     // слоты артефактов пока скрыты (артефакты не проработаны); надетый раньше артефакт виден — чтобы его можно было снять
@@ -468,7 +487,7 @@ export class CharactersScene extends BaseScene {
         const item = e ? resolveItem(e) : null;
         const slot = new Slot(this, cellX(k), cellY(k), {
           size: cell,
-          tooltip: () => (item ? this.itemTooltip(item, gear.stats, 'Клик — сведения справа') : { title: 'Ячейка рюкзака', note: 'Сюда — зелья и запасное оружие на серию арены. Клик — выбрать из инвентаря.' }),
+          tooltip: () => (item ? this.itemTooltip(item, gear.stats, 'Клик — сведения справа') : { title: 'Ячейка рюкзака', note: 'Сюда — ресурсы и запасное снаряжение на серию арены. Клик — выбрать из инвентаря.' }),
           onClick: () => {
             if (item) return this.toggleSel({ kind: 'bag', cell: k });
             if (inRun(store.state, c.uid)) return openRucksack(this, c.uid);
@@ -484,11 +503,11 @@ export class CharactersScene extends BaseScene {
       this.enableGearDrag(c, dragSlots, dragRefs, dragItems, bagCells, cells.map((e) => (e ? resolveItem(e) : null)));
     } else {
       this.enableGearDrag(c, dragSlots, dragRefs, dragItems, [], []);
-      this.body.add(text(this, x0, yb, 'Наденешь рюкзак — появятся его ячейки\nдля зелий.', { size: 12, color: COLOR.inkQuiet }));
+      this.body.add(text(this, x0, yb, 'Встроенный рюкзак — ячейки\nдля лута и снаряжения.', { size: 12, color: COLOR.inkQuiet }));
     }
-    this.renderPresets(c, x0, cells.length ? yb + 34 + bagRows * 44 : yb + 46);
-    this.hint = text(this, x0, this.right.innerH - 26, 'Клик по предмету — сведения справа,\nпо пустому месту — сведения о бойце.', { size: 12, color: COLOR.inkQuiet, wrap: 262 });
-    this.body.add(this.hint);
+    const presetsY = cells.length ? yb + 34 + bagRows * 44 : yb + 46;
+    const potionsHeight = this.renderPotions(c, x0, presetsY);
+    this.renderPresets(c, x0, presetsY + potionsHeight);
   }
 
   /**
@@ -547,7 +566,7 @@ export class CharactersScene extends BaseScene {
           this.render(store.state);
         },
       });
-      const main = p ? [...p.equipment, p.rucksack].find((id): id is string => !!id && hasItem(id)) : undefined;
+      const main = p ? p.equipment.find((id): id is string => !!id && hasItem(id)) : undefined;
       if (main) slot.setContent(createItemIcon(this, getItem(main), cell - 14));
       slot.setSelected(this.presetSel === k);
       if (same) slot.setAccent(0x3f7a2a);
@@ -596,7 +615,7 @@ export class CharactersScene extends BaseScene {
     // что сейчас на бойце (руки, артефакты, рюкзак и его ячейки)
     const onChar = new Map<string, number>();
     const put = (id: string | undefined, n = 1) => id && onChar.set(id, (onChar.get(id) ?? 0) + n);
-    for (const e of [...c.equipment, c.rucksack]) put(e?.itemId);
+    for (const e of c.equipment) put(e?.itemId);
     for (const e of c.bag) put(e?.itemId, e?.count ?? 0);
     // «взято» в отчёте включает и то, что было надето: оно просто останется
     const keep: Array<{ itemId: string; count: number }> = [];
@@ -674,20 +693,21 @@ export class CharactersScene extends BaseScene {
 
   /** Окно выбора для ячейки снаряжения: подходящие предметы из инвентаря + «Снять». */
   private openSlotPicker(c: CharacterState, gear: Gear, ref: SlotRef) {
+    if (ref === 'rucksack') return void openRucksack(this, c.uid);
     const { bp } = gear;
     const current = gear.itemAt(ref);
-    const kindName = ref === 'rucksack' ? 'рюкзак' : bp.slots[ref].type === 'Hand' ? 'оружие' : 'артефакт';
+    const kindName = bp.slots[ref].type === 'Hand' ? 'оружие' : 'артефакт';
     this.openPicker({
-      title: ref === 'rucksack' ? 'Рюкзак' : `${slotLabel(bp, ref)} — ${kindName}`,
+      title: `${slotLabel(bp, ref)} — ${kindName}`,
       current,
       accepts: (item) => slotAccepts(bp, ref, item),
       blocked: (item) => (requirementGap(item, gear.stats) > 0 ? this.gapText(item, gear.stats) : null),
       tooltip: (item) => this.itemTooltip(item, gear.stats, 'Клик — надеть'),
       onPick: (invUid) => store.act('equip', c.uid, ref, invUid),
       onClear: current ? () => store.act('unequip', c.uid, ref) : undefined,
-      clearLabel: ref === 'rucksack' && c.bag.some(Boolean) ? 'Снять (содержимое — в инвентарь)' : 'Снять',
+      clearLabel: 'Снять',
       emptyText: `В инвентаре нет: ${kindName}. Собери в «Чертежах».`,
-      blueprintTab: ref === 'rucksack' ? 'bag' : bp.slots[ref].type === 'Hand' ? 'weapon' : 'artifact',
+      blueprintTab: bp.slots[ref].type === 'Hand' ? 'weapon' : 'artifact',
       target: { charUid: c.uid, slot: ref },
     });
   }
@@ -705,8 +725,8 @@ export class CharactersScene extends BaseScene {
       onPick: (invUid) => store.act('putInBag', c.uid, cell, invUid),
       onClear: cur ? () => store.act('takeFromBag', c.uid, cell) : undefined,
       clearLabel: 'Вынуть в инвентарь',
-      emptyText: 'В инвентаре нет зелий и снаряжения. Флаконы и оружие собираются в «Чертежах».',
-      blueprintTab: 'potion',
+      emptyText: 'В инвентаре нет ресурсов и снаряжения для этой ячейки.',
+      blueprintTab: 'weapon',
       target: { charUid: c.uid, bagCell: cell },
     });
   }
@@ -789,54 +809,6 @@ export class CharactersScene extends BaseScene {
       });
     };
     draw(0);
-  }
-
-  /** Починка разбитого куба: зелья его статы из рюкзака и инвентаря. Клик по зелью — выпить и закрыть. */
-  private openRepairPicker(charUid: string, block: number) {
-    const c = store.state.characters.find((x) => x.uid === charUid);
-    if (!c) return;
-    const stat = c.blockStats[block];
-    const sources = potionSources(store.state, c, stat);
-    const cols = 5;
-    const rows = Math.min(2, Math.ceil(sources.length / cols));
-    // компактное окно: высота по числу рядов зелий
-    const m = new Modal(this, { title: `Разбитый куб · ${STAT_LABEL[stat]}`, width: 500, height: 200 + Math.max(1, rows) * 92 });
-    const body = m.card.content;
-    const w = m.card.innerW;
-    const broken = c.brokenBlocks.filter((i) => c.blockStats[i] === stat).length;
-    body.add(this.add.rectangle(10, 12, 18, 18, STAT_COLOR[stat]).setStrokeStyle(1, 0x000000, 0.4));
-    body.add(text(this, 28, 2, `Разбито кубов ${STAT_LABEL_GEN[stat]}: ${broken}. Клик по зелью — выпить${inRun(store.state, charUid) ? ' (в серии — только из рюкзака)' : ''}.`, { size: 13, color: COLOR.inkQuiet, wrap: w - 30 }));
-    // к чертежам зелий — флаконы откроются уже с этой статой
-    body.add(
-      new Button(this, w - 100, m.card.innerH - 14, 'К чертежам', {
-        variant: 'beige', width: 200, height: 40, size: 17,
-        onClick: () => {
-          m.close();
-          this.registry.set('craft.variant.bp-potion-vial', stat);
-          this.registry.set('craft.variant.bp-potion-flask', stat);
-          this.toBlueprints('potion');
-        },
-      }),
-    );
-    if (!sources.length) {
-      body.add(text(this, w / 2, 86, `Зелий ${STAT_LABEL_GEN[stat]} нет ни в рюкзаке, ни в инвентаре.`, { size: 15, color: COLOR.inkQuiet, align: 'center', wrap: w - 40 }).setOrigin(0.5));
-      return;
-    }
-    const cell = 72;
-    const gap = 12;
-    sources.slice(0, cols * 2).forEach((src, k) => {
-      const item = getItem(src.itemId) as Extract<Item, { kind: 'potion' }>;
-      const slot = new Slot(this, cell / 2 + (k % cols) * (cell + gap), 50 + cell / 2 + Math.floor(k / cols) * (cell + 20), {
-        size: cell,
-        tooltip: () => ({ title: item.name, rows: [['Чинит', `до ${Math.min(item.restoreAmount, broken)} куб.`], ['Где', src.src.kind === 'bag' ? 'в рюкзаке' : 'в инвентаре']], note: 'Клик — выпить' }),
-        onClick: () => {
-          m.close();
-          store.act('drinkPotion', charUid, src.src, block);
-        },
-      });
-      slot.setContent(createItemIcon(this, item, cell - 26), src.count).setItemGems(item);
-      body.add(slot);
-    });
   }
 
   /** Открыть «Чертежи» на нужной вкладке. */
@@ -965,14 +937,38 @@ export class CharactersScene extends BaseScene {
     const gemsInfo = target ? gemInfo(store.state, target) : null;
     // ячейки камней — прямо в карточке; клик по ячейке открывает выбор камня
     const gems = target && gemsInfo ? { info: gemsInfo, onCell: (k: number) => void openGemPicker(this, target, k) } : null;
+    const bagUp = sel.kind === 'slot' && sel.ref === 'rucksack' ? rucksackUpgradeInfo(store.state, c.uid) : null;
+    const potionUp = sel.kind === 'potion' ? potionUpgradeInfo(store.state, c.uid, sel.stat) : null;
     const upRow = !!up && up.reason !== 'max';
-    const rowsBelow = upRow ? 2 : 1;
+    const rowsBelow = bagUp || potionUp ? 1 : upRow ? 2 : 1;
     const reserve = rowsBelow * 46 + 6;
     const area = new ScrollArea(this, x0, 26, w, h - reserve);
     this.body.add(area);
     fillItemInfo(this, area, item, { count, up, cell, gems, extraRows, note: gap ? { text: gap, color: COLOR.lose } : undefined });
     const bw = (w - 8) / 2;
     const yb = 26 + h - 20;
+    if (bagUp) {
+      const upgrade = new Button(this, x0 + w / 2, yb, bagUp.reason === 'max' ? 'Рюкзак · максимум' : `Прокачать · ${bagUp.cost} набор`, {
+        width: w, height: 40, size: 16,
+        onClick: () => store.act('upgradeRucksack', c.uid),
+      }).setEnabled(bagUp.ok);
+      attachTooltip(upgrade.hit, () => ({ title: 'Набор кожевника', rows: [['Нужно', '1'], ['Есть', String(bagUp.have)]], note: 'Следующий уровень увеличивает ячейки рюкзака. Содержимое сохраняется.' }));
+      this.body.add(upgrade);
+      return;
+    }
+    if (potionUp && sel.kind === 'potion') {
+      const upgrade = new Button(this, x0 + w / 2, yb, potionUp.reason === 'max' ? 'Зелье · максимум' : `Прокачать · ${potionUp.cost} набор`, {
+        width: w, height: 40, size: 16,
+        onClick: () => store.act('upgradePotion', c.uid, sel.stat),
+      }).setEnabled(potionUp.ok);
+      attachTooltip(upgrade.hit, () => {
+        const levels = COMBAT.characterUpgrades.potionLevels;
+        const next = levels[Math.min(potionUp.level, levels.length - 1)];
+        return { title: 'Набор алхимика', rows: [['Нужно', '1'], ['Есть', String(potionUp.have)]], note: `Флакон: ${next.restoreAmount} куб. за заряд, ${next.charges} зарядов.` };
+      });
+      this.body.add(upgrade);
+      return;
+    }
     if (run) {
       // в серии арены снаряжение и рюкзак меняются только через окно рюкзака
       this.body.add(new Button(this, x0 + w / 2, yb, 'Рюкзак · сменить', { variant: 'beige', width: w, height: 40, size: 16, onClick: () => openRucksack(this, c.uid) }));
@@ -1033,7 +1029,6 @@ export class CharactersScene extends BaseScene {
       y += Math.max(28, r.getBounds().height + 6);
     };
     bp.slots.forEach((sl, i) => line(sl.type === 'Hand' ? (sl.isLeftHand ? 'Л. рука' : 'П. рука') : slotLabel(bp, i).replace('Артефакт', 'Арт.'), p.equipment[i] ?? null));
-    line('Рюкзак', p.rucksack);
     const bag = p.bag.map((b, k) => [b, k] as const).filter(([b]) => b);
     if (bag.length) {
       y += 4;

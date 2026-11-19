@@ -139,7 +139,7 @@ export class VoxelView3D extends Phaser.GameObjects.Container {
     this.disposables.push(floor.geometry, floor.material, this.thinSolid, this.thinFaint);
 
     opts.blocks.forEach((b, i) => {
-      const mesh = new Mesh(blockGeometry(b.shape), blockMaterial(b.shape, NEUTRAL_BLOCK, b.opacity ?? 1));
+      const mesh = new Mesh(blockGeometry(b.shape), blockMaterial(b.shape, NEUTRAL_BLOCK, b.opacity ?? 1, opts.pattern));
       mesh.matrixAutoUpdate = false;
       setFromMat3(mesh.matrix, (b.quat ? quatMatrix(b.quat) : eulerMatrix(b.rot)).map((row) => row.map((v) => v * (b.scale ?? 1))) as Mat3, b.pos);
       mesh.receiveShadow = true;

@@ -2,7 +2,7 @@
 // Источник — CTG/Assets/Resources/Models; конвертеры: tools/unity-export/blocks.mjs (меши) и block_maps.py (карты).
 // Геометрия — в координатах Unity, размер блока 1 (как в чертежах).
 import {
-  BoxGeometry, BufferGeometry, Color, EdgesGeometry, Float32BufferAttribute, MeshStandardMaterial, NoColorSpace, SRGBColorSpace, Texture, TextureLoader,
+  BoxGeometry, BufferGeometry, CanvasTexture, Color, EdgesGeometry, Float32BufferAttribute, MeshStandardMaterial, NoColorSpace, SRGBColorSpace, Texture, TextureLoader,
   Uint16BufferAttribute, Vector3,
 } from 'three';
 import type { BlockShape } from '../data/types';
@@ -98,12 +98,32 @@ const UNITY_COLOR = new Map<number, number>([
 ]);
 export const unityColor = (color: number) => UNITY_COLOR.get(color) ?? color;
 
+let spotsMap: CanvasTexture | undefined;
+/** Общая белая маска пятен: итоговый цвет по-прежнему задаёт материал блока. */
+function spotTexture(): CanvasTexture {
+  if (spotsMap) return spotsMap;
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = 64;
+  const ctx = canvas.getContext('2d')!;
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, 64, 64);
+  ctx.fillStyle = '#766b5e';
+  for (const [x, y, r] of [[11, 13, 6], [35, 9, 4], [49, 29, 7], [19, 40, 5], [39, 53, 6], [8, 56, 3]]) {
+    ctx.beginPath();
+    ctx.ellipse(x, y, r, r * 0.75, 0.35, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  spotsMap = new CanvasTexture(canvas);
+  spotsMap.colorSpace = SRGBColorSpace;
+  return spotsMap;
+}
+
 /**
  * Материал блока как в клиенте (URP Lit, металличность 0):
  * куб — гладкость 0.7, нормали ×2, затенение по Cube_HeightMap; клин — гладкость 1, нормали ×1.
  * Каждому блоку свой экземпляр — бой меняет цвет, свечение и прозрачность поблочно; шейдер общий.
  */
-export function blockMaterial(shape: BlockShape, color: number, opacity = 1): MeshStandardMaterial {
+export function blockMaterial(shape: BlockShape, color: number, opacity = 1, pattern?: 'spots'): MeshStandardMaterial {
   const m = blockMaps();
   const cube = shape === 'cube';
   const mat = new MeshStandardMaterial({
@@ -112,6 +132,7 @@ export function blockMaterial(shape: BlockShape, color: number, opacity = 1): Me
     // гладкость 1 у клина без отражений в сцене дала бы точечный блик — чуть шероховатее, чтобы блик читался
     roughness: cube ? 0.3 : 0.12,
     normalMap: cube ? m.cubeNormal : m.wedgeNormal,
+    map: pattern === 'spots' ? spotTexture() : null,
     aoMap: cube ? m.cubeAo : null,
     aoMapIntensity: 1,
     transparent: opacity < 1,

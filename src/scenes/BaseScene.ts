@@ -16,6 +16,7 @@ import { panel, type Card } from '../ui/Panel';
 import { getBlueprint, getItem, hasItem } from '../data/catalog';
 import { Pager } from '../ui/Pager';
 import { VoxelView } from '../ui/VoxelView';
+import { skinColorOf, skinPatternOf } from '../data/skins';
 import { STAT_COLOR } from '../ui/theme';
 import type { OpponentSceneData } from './keys';
 
@@ -168,7 +169,7 @@ export abstract class BaseScene extends Phaser.Scene {
         const on = c.uid === selected;
         list.add(panel(this, 0, y, w, 68, on ? 'light' : 'beige'));
         if (on) list.add(this.add.graphics().lineStyle(3, 0x4a2a12, 1).strokeRoundedRect(1, y + 1, w - 2, 66, 8));
-        list.add(new VoxelView(this, 44, y + 34, { blocks: bp.blocks, width: 70, height: 56, maxBlockPx: 9, colorOf: (i) => STAT_COLOR[c.blockStats[i]] }));
+        list.add(new VoxelView(this, 44, y + 34, { blocks: bp.blocks, width: 70, height: 56, maxBlockPx: 9, colorOf: (i) => skinColorOf(c.blueprintId, c.skinId, i) ?? STAT_COLOR[c.blockStats[i]], pattern: skinPatternOf(c.blueprintId, c.skinId) }));
         list.add(text(this, 90, y + 10, c.name, { kind: 'display', size: 20 }));
         const hands = c.equipment.filter((e) => e && hasItem(e.itemId) && getItem(e.itemId).kind === 'weapon').map((e) => getItem(e!.itemId).name);
         list.add(text(this, 90, y + 40, `${bp.name} · ${hands.length ? hands.join(', ') : 'без оружия — кулаки'}`, { size: 13, color: COLOR.inkQuiet }));

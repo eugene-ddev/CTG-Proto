@@ -101,6 +101,26 @@ function resourceIcon(scene: Phaser.Scene, item: ResourceItem, size: number) {
       g.lineStyle(1.2, ink, 0.7).strokePoints([new Phaser.Math.Vector2(0, -h / 2 - r * 1.6), new Phaser.Math.Vector2(r, -h / 2 - r * 0.6), new Phaser.Math.Vector2(0, -h / 2 + r * 0.4), new Phaser.Math.Vector2(-r, -h / 2 - r * 0.6)], true);
       break;
     }
+    case 'alchemist': {
+      const w = size * 0.56, h = size * 0.3;
+      g.fillStyle(shade(c, 0.65), 1).fillRoundedRect(-w / 2, 0, w, h, 4);
+      g.lineStyle(1.5, ink, 0.6).strokeRoundedRect(-w / 2, 0, w, h, 4);
+      for (const x of [-size * 0.13, size * 0.13]) {
+        g.fillStyle(0xd9d4c8, 1).fillRect(x - 3, -size * 0.28, 6, size * 0.16);
+        g.fillStyle(x < 0 ? 0x8e5aa8 : 0x3f9b72, 1).fillCircle(x, -size * 0.08, size * 0.11);
+        g.lineStyle(1.2, ink, 0.7).strokeCircle(x, -size * 0.08, size * 0.11);
+      }
+      break;
+    }
+    case 'leatherworker': {
+      const w = size * 0.58, h = size * 0.42;
+      g.fillStyle(c, 1).fillRoundedRect(-w / 2, -h / 2, w, h, 5);
+      g.fillStyle(shade(c, 0.65), 1).fillRect(-w / 2, -2, w, 5);
+      g.lineStyle(1.5, ink, 0.65).strokeRoundedRect(-w / 2, -h / 2, w, h, 5);
+      g.lineStyle(2, 0xd4a640, 1).strokeCircle(0, -h / 2, size * 0.1);
+      g.lineBetween(-w / 2 + 5, h / 2 - 5, w / 2 - 5, h / 2 - 5);
+      break;
+    }
     case 'parchment': {
       const w = size * 0.46, h = size * 0.56;
       g.fillStyle(c, 1).fillRect(-w / 2, -h / 2, w, h);

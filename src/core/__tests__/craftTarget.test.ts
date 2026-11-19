@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { START, BLUEPRINTS, getBlueprint, getItem } from '../../data/catalog';
 import type { CharacterBlueprint, Stat } from '../../data/types';
-import { equip } from '../character';
 import { completeCraft } from '../craft';
 import { applyTarget, targetFit, targetLabel } from '../craftTarget';
 import { addItem, createInitialState, type PlayerState } from '../state';
@@ -31,14 +30,12 @@ describe('контекст сборки', () => {
     expect(st.inventory.some((e) => e.itemId === 'rustySword')).toBe(false);
   });
 
-  it('в ячейку рюкзака — стопкой; без рюкзака — не подходит', () => {
+  it('во встроенный рюкзак — снаряжение; зелье в ячейку не подходит', () => {
     const { s, uid } = fresh();
     const t = { charUid: uid, bagCell: 0 };
     expect(targetFit(s, t, getItem('restoreStrengthFlask'))).toBeNull();
-    let st = addItem(s, 'rucksack', 1, 1);
-    st = equip(st, uid, 'rucksack', st.inventory.find((e) => e.itemId === 'rucksack')!.uid)!;
-    st = addItem(st, 'restoreStrengthFlask', 3, maxStack('restoreStrengthFlask'));
-    const out = applyTarget(st, t, 'restoreStrengthFlask')!;
-    expect(out.characters[0].bag[0]).toMatchObject({ itemId: 'restoreStrengthFlask', count: 3 });
+    const st = addItem(s, 'rustyAxe', 1, 1);
+    const out = applyTarget(st, t, 'rustyAxe')!;
+    expect(out.characters[0].bag[0]).toMatchObject({ itemId: 'rustyAxe', count: 1 });
   });
 });

@@ -15,7 +15,7 @@ import { createItemIcon } from '../ui/ItemIcon';
 import { hintIcon } from '../ui/HintIcon';
 import { weaponRow } from '../ui/WeaponRow';
 import { THRESHOLDS, createFighter, critOf, cubesToDisable, digPreview, dodgeOf, hasAliveCube, normalizeTarget, perkOf, slotDamageValue, type Fighter } from '../core/battle';
-import { armorAbsorb, bagSlots, itemOf } from '../core/character';
+import { armorAbsorb, bagSlots, itemOf, rucksackItemId } from '../core/character';
 import { type Opponent } from '../core/opponent';
 import { randomSeed } from '../core/rng';
 import type { CharacterState } from '../core/state';
@@ -31,10 +31,9 @@ import { openRucksack } from '../ui/RucksackModal';
 import { SERIES_LENGTH, seriesRetries, retriesLeft } from '../core/arena';
 import { ARENA, getItem as itemById } from '../data/catalog';
 import { FACE_LEFT, FACE_RIGHT } from '../render/anim';
+import { skinColorOf, skinPatternOf, skinsFor } from '../data/skins';
 
 /** Плашки приоритета атаки. */
-/** Иконка кнопки рюкзака, когда рюкзак не надет. */
-const BAG_ICON_ID = 'pouch';
 // шесть плашек приоритета — на всю ширину экрана (40…1240)
 const CHIP_W = 190;
 const CHIP_H = 52;
@@ -69,6 +68,8 @@ export class OpponentScene extends BaseScene {
   /** Ползунок раскопки: сколько кубов пути уже «разбито» в предпросмотре (0 — бой не начат). */
   private digStep = 0;
   private digUi?: { set: (k: number, n: number) => void };
+  /** Показать исходные статные цвета вместо скинов; локальная настройка экрана. */
+  private originalModels = false;
 
   constructor() {
     super(SCENE.opponent);
@@ -82,6 +83,7 @@ export class OpponentScene extends BaseScene {
   }
 
   create() {
+    this.originalModels = this.registry.get('opponent.originalModels') === true;
     const c = store.state.characters.find((x) => x.uid === this.charUid);
     // серия с игроками без выбранного соперника — к списку соперников
     if (c && store.state.arenaRun?.mode === 'players' && !store.state.arenaRun.opp) return void this.scene.start(SCENE.rivals);
@@ -120,6 +122,16 @@ export class OpponentScene extends BaseScene {
     this.oppSeed = this.opp.seed;
     const enemy = createFighter('enemy', this.opp);
     const me = createFighter('player', playerFighterInput(c));
+    if (skinsFor(me.blueprintId).length || skinsFor(enemy.blueprintId).length) {
+      const toggle = new Button(this, GAME_W / 2, 116, this.originalModels ? 'Вид: оригинал' : 'Вид: скин', {
+        variant: 'beige', width: 200, height: 30, size: 14,
+        onClick: () => {
+          this.registry.set('opponent.originalModels', !this.originalModels);
+          this.scene.restart({ charUid: this.charUid, oppSeed: this.oppSeed, except: this.except } satisfies OpponentSceneData);
+        },
+      });
+      attachTooltip(toggle.hit, () => ({ title: 'Отображение моделей', note: 'Оригинал — цвета статов для оценки сборки. Скин — вид, который будет использоваться в бою.' }));
+    }
 
     // свой боец слева, противник справа — лицом друг к другу
     this.fighterCard(40, 'Твой боец', me, bp.name, c.equipment.map((e) => (e && hasItem(e.itemId) ? (itemOf(e) as EquipmentItem).itemLevel : null)));
@@ -150,17 +162,17 @@ export class OpponentScene extends BaseScene {
       width: 60,
       height: 54,
       onClick: () => {
-        const m = openRucksack(this, c.uid, { note: lossRule(run.mode) === 'drop' ? 'Между боями: выпить зелье, сменить оружие. При поражении рюкзак и оружие в руках пропадают.' : 'Между боями: выпить зелье, сменить оружие.' });
+        const m = openRucksack(this, c.uid, { note: lossRule(run.mode) === 'drop' ? 'Между боями: выпить зелье, сменить оружие. При поражении оружие и содержимое рюкзака пропадают.' : 'Между боями: выпить зелье, сменить оружие.' });
         m.once(Phaser.GameObjects.Events.DESTROY, () => this.sys.isActive() && this.scene.restart({ charUid: c.uid, oppSeed: this.oppSeed, except: this.except } satisfies OpponentSceneData));
       },
     });
-    const bagItemId = c.rucksack && hasItem(c.rucksack.itemId) ? c.rucksack.itemId : BAG_ICON_ID;
+    const bagItemId = rucksackItemId(c);
     const bagIcon = createItemIcon(this, itemById(bagItemId), 38) as Phaser.GameObjects.Components.Transform & Phaser.GameObjects.Components.Alpha & Phaser.GameObjects.GameObject;
-    bagIcon.setPosition(0, -3).setAlpha(c.rucksack ? 1 : 0.4);
+    bagIcon.setPosition(0, -3);
     bagBtn.addAt(bagIcon, bagBtn.getIndex(bagBtn.hit));
     const bagCells = bagSlots(c);
     if (bagCells.length) bagBtn.addAt(text(this, 24, 20, `${bagCells.filter(Boolean).length}/${bagCells.length}`, { kind: 'mono', size: 10, weight: 700, color: COLOR.ink }).setOrigin(1, 1), bagBtn.getIndex(bagBtn.hit));
-    attachTooltip(bagBtn.hit, () => ({ title: 'Рюкзак', note: c.rucksack ? 'Выпить зелье, сменить оружие.' : 'Рюкзака нет — сменить оружие в руках.' }));
+    attachTooltip(bagBtn.hit, () => ({ title: 'Рюкзак и зелья', note: 'Выпить зелье, сменить оружие, улучшить зелья и рюкзак.' }));
     new Button(this, GAME_W / 2, 676, 'В бой', {
       width: 280,
       height: 60,
@@ -334,7 +346,8 @@ export class OpponentScene extends BaseScene {
     const modelH = card.innerH - SLOT - 30;
     const view = modelView(this, mw / 2, modelH / 2 - 4, {
       blocks: bp.blocks, width: mw - 24, height: modelH - 10, maxBlockPx: 26, interactive: true, showFront: true,
-      colorOf: (i) => STAT_COLOR[f.blocks[i].stat],
+      colorOf: (i) => this.originalModels ? STAT_COLOR[f.blocks[i].stat] : skinColorOf(f.blueprintId, f.skinId, i) ?? STAT_COLOR[f.blocks[i].stat],
+      pattern: this.originalModels ? undefined : skinPatternOf(f.blueprintId, f.skinId),
       lookOf: (i) => (f.blocks[i].alive ? 'solid' : 'broken'),
       yaw: f.side === 'enemy' ? FACE_LEFT : FACE_RIGHT,
       // без оружия на модели: на превью важны кубы и путь раскопки, оружие — в ячейках под моделью

@@ -5,14 +5,14 @@
 import { BLUEPRINTS, COMBAT, ITEMS, START, maxStackOf } from '../data/catalog';
 import type { ArenaRun } from '../core/arena';
 import { browserStorage, type KeyValueStorage } from '../core/save';
-import { SHARD_ID, SHARD_STACK, STATE_VERSION, addCubes, addItem, createInitialState, type PlayerState } from '../core/state';
+import { SHARD_ID, SHARD_STACK, STATE_VERSION, addCubes, addItem, createInitialState, newCharacterPotions, normalizeCharacter, type PlayerState } from '../core/state';
 import { freshArenaProfile, setSeriesRetries, type ArenaProfile } from '../core/arena';
 import { applyAction, isServerSeeded, stateHash, type ActionArgs, type ActionCall, type ActionName } from '../core/actions';
 import { randomSeed } from '../core/rng';
 import { defaultCharacterName } from '../core/craft';
 import { buildOrder } from '../core/build';
 import { defaultCounts, nextStat } from '../core/stats';
-import { getBlueprint, hasBlueprint, hasItem } from '../data/catalog';
+import { getBlueprint, getItem, hasBlueprint, hasItem } from '../data/catalog';
 import type { Stat } from '../data/types';
 
 type Listener = (state: PlayerState) => void;
@@ -334,10 +334,10 @@ export function migrate(input: PlayerState & { models?: LegacyModel[]; cubes?: n
       : (rest.version ?? 1) < 4 ? (START.blueprints ?? []).filter(hasBlueprint) : rest.unlockedBlueprints.filter(hasBlueprint),
     manuallyCrafted: rest.manuallyCrafted.filter(hasBlueprint),
     // уровни оружия 1–3 (этап 8): старые 2–100 → 3
-    inventory: rest.inventory.filter((e) => hasItem(e.itemId)).map(clampLevel),
+    inventory: rest.inventory.filter((e) => hasItem(e.itemId) && getItem(e.itemId).kind !== 'potion' && getItem(e.itemId).kind !== 'bag').map(clampLevel),
     characters: rest.characters
       .filter((c) => hasBlueprint(c.blueprintId))
-      .map((c) => ({ ...c, rucksack: c.rucksack ?? null, bag: Array.isArray(c.bag) ? c.bag.map((e) => (e && hasItem(e.itemId) ? clampLevel(e) : null)) : [], equipment: c.equipment.map((e) => (e && hasItem(e.itemId) ? clampLevel(e) : null)) })),
+      .map((c) => normalizeCharacter({ ...c, bag: Array.isArray(c.bag) ? c.bag.map((e) => (e && hasItem(e.itemId) ? clampLevel(e) : null)) : [], equipment: c.equipment.map((e) => (e && hasItem(e.itemId) ? clampLevel(e) : null)) })),
   };
   if (oldCubes) s = addCubes(s, oldCubes);
   if ((oldShards ?? 0) + runShards > 0) s = addItem(s, SHARD_ID, (oldShards ?? 0) + runShards, SHARD_STACK);
@@ -357,7 +357,7 @@ export function migrate(input: PlayerState & { models?: LegacyModel[]; cubes?: n
       ...s,
       characters: [
         ...s.characters,
-        { uid: `c${s.nextUid}`, name: defaultCharacterName(s, bp), blueprintId: bp.id, blockStats, brokenBlocks: [], equipment: bp.slots.map(() => null), rucksack: null, bag: [] },
+        { uid: `c${s.nextUid}`, name: defaultCharacterName(s, bp), blueprintId: bp.id, blockStats, brokenBlocks: [], equipment: bp.slots.map(() => null), rucksackLevel: 1, potions: newCharacterPotions(), bag: [] },
       ],
       nextUid: s.nextUid + 1,
     };

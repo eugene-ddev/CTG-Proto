@@ -34,18 +34,16 @@ describe('крафт', () => {
     const r = completeCraft(fresh(), getBlueprint('bp-lobster'), { manual: true, maxStack, blockStats: allStr(38) })!;
     expect(cubeCount(r.state)).toBe(START.cubes - 38);
     const c = r.state.characters[0];
-    expect(c).toEqual({ uid: expect.any(String), name: 'Лобстер 1', blueprintId: 'bp-lobster', blockStats: allStr(38), brokenBlocks: [], equipment: [null, null, null, null, null], rucksack: null, bag: [] });
+    expect(c).toMatchObject({ uid: expect.any(String), name: 'Лобстер 1', blueprintId: 'bp-lobster', blockStats: allStr(38), brokenBlocks: [], equipment: [null, null, null, null, null], rucksackLevel: 1, bag: [] });
     expect(r.result).toEqual({ kind: 'character', blueprintId: 'bp-lobster', charUid: c.uid });
     const r2 = completeCraft(r.state, getBlueprint('bp-lobster'), { manual: true, maxStack, blockStats: allStr(38) })!;
     expect(r2.state.characters.map((x) => x.name)).toEqual(['Лобстер 1', 'Лобстер 2']);
   });
-  it('зелье и камень требуют вариант и дают предмет этого варианта', () => {
-    const flask = getBlueprint('bp-potion-flask');
-    expect(completeCraft(fresh(), flask, { manual: true, maxStack })).toBeNull();
-    const r = completeCraft(fresh(), flask, { manual: true, maxStack, variantKey: 'Luck' })!;
-    expect(r.result).toEqual({ kind: 'item', itemId: 'restoreLuckFlask' });
-    const g = completeCraft(fresh(), getBlueprint('bp-gem'), { manual: true, maxStack, variantKey: 'freeze' })!;
-    expect(g.result).toEqual({ kind: 'item', itemId: 'iceGem' });
+  it('зелья, рюкзаки и наградные камни нельзя собрать по скрытым чертежам', () => {
+    for (const id of ['bp-potion-vial', 'bp-potion-flask', 'bp-pouch', 'bp-rucksack', 'bp-rucksack-large', 'bp-rucksack-huge', 'bp-gem']) {
+      expect(completeCraft(fresh(), getBlueprint(id), { manual: true, maxStack, variantKey: 'Luck' }), id).toBeNull();
+      expect(craftFailure(fresh(), getBlueprint(id), { manual: true, maxStack, variantKey: 'Luck' }), id).toMatch(/недоступен/);
+    }
   });
   it('не хватает кубов — ничего не меняется', () => {
     const poor = withCubes(fresh(), 7);
@@ -81,7 +79,7 @@ describe('разборка', () => {
     expect(after.inventory.some((e) => e.uid === sword.uid)).toBe(false);
   });
   it('из стопки зелий разбирается одна штука', () => {
-    const s = fresh();
+    const s = addItem(fresh(), 'restoreStrengthVial', 5, 10);
     const stack = s.inventory.find((e) => e.itemId.startsWith('restore'))!;
     const after = disassembleItem(s, stack.uid, blueprintOf)!;
     expect(after.inventory.find((e) => e.uid === stack.uid)?.count).toBe(stack.count - 1);
@@ -95,10 +93,10 @@ describe('разборка нескольких', () => {
     return b ? getBlueprint(b) : undefined;
   };
   it('разбирает выбранные записи целиком, стопки — все штуки, кубы — сумма половин', () => {
-    let s = addItem(addItem(fresh(), 'rustySword', 1, 1), 'rustyAxe', 1, 1);
+    let s = addItem(addItem(addItem(fresh(), 'rustySword', 1, 1), 'rustyAxe', 1, 1), 'restoreStrengthVial', 5, 10);
     const sword = s.inventory.find((e) => e.itemId === 'rustySword')!.uid;
     const axe = s.inventory.find((e) => e.itemId === 'rustyAxe')!.uid;
-    const vials = s.inventory.find((e) => e.itemId === 'restoreStrengthVial')!; // 5 шт. на старте
+    const vials = s.inventory.find((e) => e.itemId === 'restoreStrengthVial')!;
     const expected =
       disassemblyRefund(craftCost(bpOf('rustySword')!)) + disassemblyRefund(craftCost(bpOf('rustyAxe')!)) + disassemblyRefund(craftCost(bpOf(vials.itemId)!)) * vials.count;
     expect(disassemblyRefundOf(s, [sword, axe, vials.uid], bpOf)).toBe(expected);
@@ -113,9 +111,10 @@ describe('разборка нескольких', () => {
 
 describe('закрытые чертежи', () => {
   const start = () => createInitialState(START, BLUEPRINTS.map((b) => b.id), maxStack);
-  it('с начала открыты варан, меч, малый флакон и подсумок', () => {
-    expect(start().unlockedBlueprints).toEqual(['bp-waran', 'bp-sword', 'bp-potion-vial', 'bp-pouch']);
+  it('с начала открыты только варан и меч', () => {
+    expect(start().unlockedBlueprints).toEqual(['bp-waran', 'bp-sword']);
     expect(completeCraft(start(), getBlueprint('bp-axe'), { manual: true, maxStack })).toBeNull();
+    expect(unlockBlueprint(addItem(start(), 'parchment', 1, 20), 'bp-potion-flask')).toBeNull();
   });
   it('чертёж открывается чистым пергаментом', () => {
     expect(unlockBlueprint(start(), 'bp-axe')).toBeNull();

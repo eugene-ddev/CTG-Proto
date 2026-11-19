@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { BLUEPRINTS, START, maxStackOf } from '../../data/catalog';
 import type { CharacterBlueprint, Stat } from '../../data/types';
 import { ACTIONS, applyAction, isDebugAction, stateHash } from '../actions';
+import { bagSlots } from '../character';
 import { createInitialState, cubeCount } from '../state';
 
 const fresh = () => createInitialState(START, BLUEPRINTS.map((b) => b.id), maxStackOf);
@@ -55,7 +56,6 @@ describe('бой серии: пересчёт по вводу', () => {
     s = applyAction(s, 'debugGiveAllItems', [], ctx)!;
     const uid = s.characters[0].uid;
     s = applyAction(s, 'equip', [uid, 0, s.inventory.find((e) => e.itemId === 'rustySword')!.uid], ctx)!;
-    s = applyAction(s, 'equip', [uid, 'rucksack', s.inventory.find((e) => e.itemId === 'rucksack')!.uid], ctx)!;
     s = applyAction(s, 'startRun', [uid], ctx)!;
     return applyAction(s, 'startFight', [], { ...ctx, seed: 777 })!;
   };
@@ -118,12 +118,11 @@ describe('аргументы действий', () => {
     let s = applyAction(fresh(), 'craft', [craftWaran], ctx)!;
     s = applyAction(s, 'debugGiveAllItems', [], ctx)!;
     const uid = s.characters[0].uid;
-    s = applyAction(s, 'equip', [uid, 'rucksack', s.inventory.find((e) => e.itemId === 'rucksack')!.uid], ctx)!;
-    const potion = s.inventory.find((e) => e.itemId.startsWith('restore'))!.uid;
-    for (const cell of [null, 1.5, '0', -1, 'x', {}]) expect(applyAction(s, 'putInBag', [uid, cell, potion], ctx)).toBeNull();
-    expect(applyAction(s, 'putInBag', [uid, 0, potion, 'лишний'], ctx)).toBeNull();
-    expect(applyAction(s, 'putInBag', [uid, 0, potion], ctx)).not.toBeNull();
-    expect(applyAction(s, 'equip', [uid, 'сумка', potion], ctx)).toBeNull();
+    const resource = s.inventory.find((e) => e.itemId === 'whetstone')!.uid;
+    for (const cell of [null, 1.5, '0', -1, 'x', {}]) expect(applyAction(s, 'putInBag', [uid, cell, resource], ctx)).toBeNull();
+    expect(applyAction(s, 'putInBag', [uid, 0, resource, 'лишний'], ctx)).toBeNull();
+    expect(applyAction(s, 'putInBag', [uid, 0, resource], ctx)).not.toBeNull();
+    expect(applyAction(s, 'equip', [uid, 'сумка', resource], ctx)).toBeNull();
   });
 
   it('через JSON (как на сервере) необязательный аргумент даёт тот же итог: лут ложится в рюкзак', async () => {
@@ -135,7 +134,6 @@ describe('аргументы действий', () => {
     const inv = (id: string) => s.inventory.find((e) => e.itemId === id)!.uid;
     s = applyAction(s, 'equip', [uid, 0, inv('rustyHammer')], ctx)!;
     s = applyAction(s, 'equip', [uid, 1, inv('rustyAxe')], ctx)!;
-    s = applyAction(s, 'equip', [uid, 'rucksack', inv('rucksack')], ctx)!;
     // перебираем противников, пока боец не победит
     let won: ReturnType<typeof resolveFight> = null;
     for (let seed = 1; seed < 200 && !won; seed++) {
@@ -162,7 +160,6 @@ describe('серии двух видов', () => {
     const uid = s.characters[0].uid;
     const inv = (id: string) => s.inventory.find((e) => e.itemId === id)!.uid;
     s = applyAction(s, 'equip', [uid, 0, inv('rustySword')], ctx)!;
-    s = applyAction(s, 'equip', [uid, 'rucksack', inv('rucksack')], ctx)!;
     return { s, uid };
   };
 
@@ -177,10 +174,10 @@ describe('серии двух видов', () => {
     }
     expect(run.arenaRun).toBeNull();
     expect(run.characters[0].equipment[0]?.itemId).toBe('rustySword');
-    expect(run.characters[0].rucksack?.itemId).toBe('rucksack');
+    expect(run.characters[0].rucksackLevel).toBe(1);
   });
 
-  it('серия с игроками: бой со снимком, рейтинг по Эло, поражение отнимает оружие и рюкзак', async () => {
+  it('серия с игроками: бой со снимком, рейтинг по Эло, поражение отнимает оружие и содержимое рюкзака', async () => {
     const { startPvp, snapshotOf } = await import('../arena');
     const { ratingDeltas } = await import('../rating');
     const { s, uid } = fighter();
@@ -196,7 +193,8 @@ describe('серии двух видов', () => {
     expect(lost.pvpPending).toMatchObject({ opponentId: 'u2', win: false, delta: d.lose });
     expect(lost.arenaRun).toBeNull();
     expect(lost.characters[0].equipment[0]).toBeNull();
-    expect(lost.characters[0].rucksack).toBeNull();
+    expect(lost.characters[0].rucksackLevel).toBe(1);
+    expect(lost.characters[0].bag).toEqual([]);
   });
 });
 
@@ -208,11 +206,14 @@ describe('стартовый набор и «+ все предметы»', () =>
     for (const item of ITEMS) {
       if (item.id === 'cube') continue;
       const stacks = s.inventory.filter((e) => e.itemId === item.id);
+      if (item.kind === 'potion' || item.kind === 'bag') {
+        expect(stacks, item.id).toEqual([]);
+        continue;
+      }
       const listed = START.allItemsCounts?.[item.id];
       expect(stacks.map((e) => e.count), item.id).toEqual([listed ?? maxStackOf(item.id)]);
     }
-    for (const id of ['whetstone', 'parchment', 'jewelerKit']) expect(s.inventory.find((e) => e.itemId === id)?.count, id).toBe(10);
-    expect(maxStackOf('restoreStrengthVial')).toBe(10);
+    for (const id of ['whetstone', 'parchment', 'jewelerKit', 'alchemistKit', 'leatherworkerKit']) expect(s.inventory.find((e) => e.itemId === id)?.count, id).toBe(10);
   });
 
   it('«+ все предметы»: каждого предмета прибавляется полная стопка', async () => {
@@ -220,6 +221,22 @@ describe('стартовый набор и «+ все предметы»', () =>
     const before = fresh();
     const after = applyAction(before, 'debugGiveAllItems', [], ctx)!;
     const count = (s: typeof before, id: string) => s.inventory.filter((e) => e.itemId === id).reduce((n, e) => n + e.count, 0);
-    for (const item of ITEMS) expect(count(after, item.id) - count(before, item.id), item.id).toBe(maxStackOf(item.id));
+    for (const item of ITEMS) expect(count(after, item.id) - count(before, item.id), item.id).toBe(item.kind === 'potion' || item.kind === 'bag' ? 0 : maxStackOf(item.id));
+  });
+
+  it('действия прокачки: набор алхимика улучшает одно зелье, набор кожевника — рюкзак', () => {
+    let s = applyAction(fresh(), 'craft', [craftWaran], ctx)!;
+    s = applyAction(s, 'debugGiveAllItems', [], ctx)!;
+    const uid = s.characters[0].uid;
+    s = applyAction(s, 'upgradePotion', [uid, 'Strength'], ctx)!;
+    expect(s.characters[0].potions.Strength).toEqual({ level: 2, charges: 5 });
+    expect(s.characters[0].potions.Armor).toEqual({ level: 1, charges: 5 });
+    s = applyAction(s, 'upgradeRucksack', [uid], ctx)!;
+    expect(s.characters[0].rucksackLevel).toBe(2);
+    expect(bagSlots(s.characters[0])).toHaveLength(6);
+    s = applyAction(s, 'setSkin', [uid, 'waran-rock'], ctx)!;
+    expect(s.characters[0].skinId).toBe('waran-rock');
+    expect(applyAction(s, 'setSkin', [uid, 'waran-missing'], ctx)).toBeNull();
+    expect(applyAction(s, 'setSkin', [uid, 'waran-albino'], ctx)).toBeNull();
   });
 });

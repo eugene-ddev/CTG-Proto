@@ -11,6 +11,7 @@ import { Button } from '../ui/Button';
 import { text } from '../ui/text';
 import { COLOR, GAME_W, GAME_H, STAT_COLOR } from '../ui/theme';
 import { modelView } from '../ui/modelView';
+import { skinColorOf, skinPatternOf } from '../data/skins';
 import { net } from '../net/client';
 import { Modal } from '../ui/Modal';
 import { FACE_RIGHT } from '../render/anim';
@@ -57,7 +58,8 @@ export class MainMenuScene extends BaseScene {
       maxBlockPx: 36,
       interactive: true,
       yaw: FACE_RIGHT,
-      colorOf: (i) => STAT_COLOR[c.blockStats[i]],
+      colorOf: (i) => skinColorOf(c.blueprintId, c.skinId, i) ?? STAT_COLOR[c.blockStats[i]],
+      pattern: skinPatternOf(c.blueprintId, c.skinId),
       lookOf: (i) => (broken.has(i) ? 'broken' : 'solid'),
       slots: bp.slots,
       slotMarkers: false,
@@ -112,7 +114,7 @@ export class MainMenuScene extends BaseScene {
       text(this, cx, 574, `${k + 1} / ${chars.length}`, { size: 12, color: COLOR.lightQuiet }).setOrigin(0.5, 0);
     }
 
-    // два вида серий: с ботами (при поражении всё остаётся) и с игроками (рейтинг; при поражении оружие и рюкзак пропадают).
+    // два вида серий: с ботами (при поражении всё остаётся) и с игроками (рейтинг; при поражении оружие и содержимое рюкзака пропадают).
     // Идёт серия — одна кнопка «Продолжить».
     if (run) {
       new Button(this, cx, 636, run.mode === 'players' ? 'Продолжить · игроки' : 'Продолжить серию', {

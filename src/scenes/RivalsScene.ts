@@ -10,6 +10,7 @@ import { net, type Rival, type RivalList } from '../net/client';
 import { Button } from '../ui/Button';
 import { Card } from '../ui/Panel';
 import { VoxelView } from '../ui/VoxelView';
+import { skinColorOf, skinPatternOf } from '../data/skins';
 import { text } from '../ui/text';
 import { COLOR, STAT_COLOR } from '../ui/theme';
 import { BaseScene } from './BaseScene';
@@ -36,7 +37,7 @@ export class RivalsScene extends BaseScene {
     this.setupScreen({
       title: 'Соперники',
       kicker: run ? `Бой с игроками · бой ${run.fight} из ${SERIES_LENGTH} · побед ${run.wins}` : `Бой с игроками · серия из ${SERIES_LENGTH} боёв`,
-      subtitle: `твой рейтинг ${store.arena.rating} · победил — забираешь лут соперника и рейтинг, проиграл — теряешь оружие, рюкзак и рейтинг`,
+      subtitle: `твой рейтинг ${store.arena.rating} · победил — забираешь лут соперника и рейтинг, проиграл — теряешь оружие, содержимое рюкзака и рейтинг`,
       back: run ? null : SCENE.menu,
     });
     if (run) {
@@ -101,7 +102,7 @@ export class RivalsScene extends BaseScene {
     const known = hasBlueprint(snap.blueprintId);
     if (known) {
       const bp = getBlueprint(snap.blueprintId) as CharacterBlueprint;
-      body.add(new VoxelView(this, 52, y + 42, { blocks: bp.blocks, width: 92, height: 72, maxBlockPx: 11, yaw: 270, colorOf: (i) => STAT_COLOR[snap.blockStats[i]] }));
+      body.add(new VoxelView(this, 52, y + 42, { blocks: bp.blocks, width: 92, height: 72, maxBlockPx: 11, yaw: 270, colorOf: (i) => skinColorOf(snap.blueprintId, snap.skinId, i) ?? STAT_COLOR[snap.blockStats[i]], pattern: skinPatternOf(snap.blueprintId, snap.skinId) }));
     }
     body.add(text(this, 116, y + 6, r.name, { kind: 'display', size: 24 }));
     body.add(text(this, 116, y + 38, `рейтинг ${r.rating} · побед ${r.wins} · поражений ${r.losses}`, { size: 13, color: COLOR.inkQuiet }));

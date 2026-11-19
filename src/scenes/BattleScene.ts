@@ -4,6 +4,7 @@ import { createRunBattle, resolveFight, type FightInputs } from '../core/fight';
 import { lossRule, type RivalInfo } from '../core/arena';
 import { SCENE, type BattleSceneData, type CharactersSceneData, type OpponentSceneData } from './keys';
 import { EFFECTS, getBlueprint, getItem, hasItem, itemModel, weaponStrike } from '../data/catalog';
+import { skinColorOf, skinPatternOf } from '../data/skins';
 import { FACE_LEFT, FACE_RIGHT, attackStyleOf, type AttackStyle } from '../render/anim';
 import { PATTERN_LABEL, STAT_LABEL_GEN, STAT_SHORT, disabledEffect, effectParts, patternDescription, statDisabledTitle, turns, weaponPerkText } from '../data/labels';
 import type { EffectId, Stat } from '../data/types';
@@ -297,10 +298,13 @@ export class BattleScene extends BaseScene {
     const view: FighterView = this.layer3d
       ? this.layer3d.arena.addFighter({
         side: f.side,
+        blueprintId: f.blueprintId,
+        skinId: f.skinId,
         blocks,
         slots: bp.kind === 'character' ? bp.slots : [],
         equipped: f.slots.map((s) => itemModel(s.item?.id, s.item?.itemLevel)),
-        colorOf: (i) => STAT_COLOR[f.blocks[i].stat],
+        colorOf: (i) => skinColorOf(f.blueprintId, f.skinId, i) ?? STAT_COLOR[f.blocks[i].stat],
+        pattern: skinPatternOf(f.blueprintId, f.skinId),
         alive: (i) => shownAlive[i],
         slotEffects: f.slots.map((s) => s.ability?.effects),
       })
@@ -318,7 +322,8 @@ export class BattleScene extends BaseScene {
       // перёд модели (+Z) на экране: 180° — вправо-вниз, 270° — влево-вниз → бойцы смотрят друг на друга
       yaw: right ? FACE_LEFT : FACE_RIGHT,
       interactive: true,
-      colorOf: (i) => STAT_COLOR[f.blocks[i].stat],
+      colorOf: (i) => skinColorOf(f.blueprintId, f.skinId, i) ?? STAT_COLOR[f.blocks[i].stat],
+        pattern: skinPatternOf(f.blueprintId, f.skinId),
       lookOf: (i) => (shownAlive[i] ? 'solid' : 'broken'),
     });
     // слоты рук и артефактов
@@ -977,7 +982,7 @@ export class BattleScene extends BaseScene {
     });
     const w = m.card.innerW;
     const inSeries = !!store.state.arenaRun;
-    m.card.content.add(text(this, w / 2, 10, inSeries && lossRule(this.mode) === 'drop' ? 'Серия закончится поражением —\nоружие в руках и рюкзак пропадут.' : inSeries ? 'Серия закончится поражением.' : 'Бой будет засчитан поражением.', { size: 16, align: 'center' }).setOrigin(0.5, 0));
+    m.card.content.add(text(this, w / 2, 10, inSeries && lossRule(this.mode) === 'drop' ? 'Серия закончится поражением —\nоружие в руках и содержимое рюкзака пропадут.' : inSeries ? 'Серия закончится поражением.' : 'Бой будет засчитан поражением.', { size: 16, align: 'center' }).setOrigin(0.5, 0));
     m.card.content.add(new Button(this, w / 2 - 105, 110, 'Остаться', { variant: 'beige', width: 190, height: 48, size: 20, onClick: () => m.close() }));
     m.card.content.add(
       new Button(this, w / 2 + 105, 110, 'Выйти', {
@@ -1067,14 +1072,14 @@ export class BattleScene extends BaseScene {
         add(text(this, 0, y, 'Серия окончена — разбитые кубы начнут восстанавливаться. Лут забери в рюкзак до выхода.', { size: 13, color: COLOR.inkQuiet, wrap: w }));
       } else {
         const left = SERIES_LENGTH - (store.state.arenaRun?.wins ?? 0);
-        add(text(this, 0, y, `До награды серии ${left === 1 ? 'остался 1 бой' : `осталось ${left} боя`}. На арене разбитые кубы не чинятся — только зелья из рюкзака.`, { size: 13, color: COLOR.inkQuiet, wrap: w }));
+        add(text(this, 0, y, `До награды серии ${left === 1 ? 'остался 1 бой' : `осталось ${left} боя`}. На арене разбитые кубы не чинятся — только встроенными зельями.`, { size: 13, color: COLOR.inkQuiet, wrap: w }));
       }
     } else {
       const lines: Array<[string, string]> = [];
       if (!win && out?.retry) {
         const left = retriesLeft(store.state.arenaRun);
         lines.push(['Повтор', `Бой можно переиграть: тот же противник, боец вернётся как до боя, ничего не пропадёт. Осталось повторов: ${left} из ${seriesRetries()}.`]);
-        lines.push(['Сдаться', lossRule(this.mode) === 'keep' ? 'Серия закончится поражением; оружие и рюкзак останутся у бойца.' : 'Серия закончится поражением: оружие в руках и рюкзак с содержимым пропадут.']);
+        lines.push(['Сдаться', lossRule(this.mode) === 'keep' ? 'Серия закончится поражением; снаряжение и содержимое рюкзака останутся у бойца.' : 'Серия закончится поражением: оружие в руках и содержимое рюкзака пропадут.']);
       } else if (!win && out) {
         const names = out.lost.map((id) => (hasItem(id) ? getItem(id).name : id));
         const keep = lossRule(this.mode) === 'keep';

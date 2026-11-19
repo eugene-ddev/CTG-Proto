@@ -31,8 +31,6 @@ const FILTERS: Array<[Filter, string]> = [
   ['weapon', 'Оружие'],
   ['artifact', 'Артефакты'],
   ['gem', 'Камни'],
-  ['potion', 'Зелья'],
-  ['bag', 'Сумки'],
   ['resource', 'Ресурсы'],
 ];
 const FILTER_KEY = 'inventory.filter';
@@ -217,7 +215,7 @@ export class InventoryScene extends BaseScene {
       this.grid.add(slot);
       cells.push(slot);
     }
-    // перетаскивание: на другой предмет — поменять местами (то же зелье — в стопку), на пустую ячейку — в конец
+    // перетаскивание: на другой предмет — поменять местами (тот же ресурс — в стопку), на пустую ячейку — в конец
     if (!this.multi) {
       enableSlotDrag(this, cells, cells.map((_, i) => (pageEntries[i] ? getItem(pageEntries[i].itemId) : null)), SLOT - 18, (from, to) => {
         const a = pageEntries[from];

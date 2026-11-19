@@ -5,19 +5,20 @@ import { BaseScene } from './BaseScene';
 import { SCENE, type CharactersSceneData, type CraftSceneData } from './keys';
 import { BLUEPRINT_KIND_LABEL, COMBAT, getBlueprint, getItem, hasBlueprint } from '../data/catalog';
 import { STAT_LABEL, STAT_SHORT, variantDescription } from '../data/labels';
+import { defaultSkinId, resolveSkin, skinColorOf, skinPatternOf, skinsFor, type CharacterSkin } from '../data/skins';
 import { STATS, type Blueprint, type BlueprintVariant, type Stat } from '../data/types';
 import { buildOrder, frontier, adjacency } from '../core/build';
 import { layeredStats } from '../core/layout';
 import { canAutoCraft, completeCraft, craftFailure, craftCost, type CraftResult } from '../core/craft';
 import { countsAfterPaint, countsAfterRepaint, defaultCounts, nextStat, totalCount, usedCounts, type StatCounts } from '../core/stats';
 import { store } from '../game/store';
-import { EDIT_COST, applyCharacterEdit, cellCounts, editChanges, editCost, editDelta, editLocked, rebalanceCells, type Cells } from '../core/edit';
+import { applyCharacterEdit, cellCounts, editChanges, editCost, editDelta, editLocked, rebalanceCells, type Cells } from '../core/edit';
 import type { CharacterState } from '../core/state';
 import { applyTarget, targetFit, targetLabel } from '../core/craftTarget';
 import { Button } from '../ui/Button';
 import { createItemIcon } from '../ui/ItemIcon';
 import { Modal } from '../ui/Modal';
-import { Card, dottedLine } from '../ui/Panel';
+import { Card, dottedLine, panel } from '../ui/Panel';
 import { ResourceBar } from '../ui/ResourceBar';
 import { StatAllocator } from '../ui/StatAllocator';
 import { TEX } from '../ui/textures';
@@ -77,8 +78,15 @@ export class CraftScene extends BaseScene {
   private locked = new Set<number>();
   /** Текущая модель в редакторе: стата куба или null — убран. */
   private cells: Cells = [];
+  /** Скин применяется вместе с остальными изменениями по «Подтвердить». */
+  private origSkinId?: string;
+  private editSkinId?: string;
   private deltaText?: Phaser.GameObjects.Text;
   private confirmBtn?: Button;
+  private skinTiles: Array<{ id: string; frame: Phaser.GameObjects.Rectangle; check: Phaser.GameObjects.Text }> = [];
+  private previewSkin = false;
+  private skinPage = 0;
+  private skinGallery?: Phaser.GameObjects.Container;
 
   constructor() {
     super(SCENE.craft);
@@ -104,6 +112,10 @@ export class CraftScene extends BaseScene {
     this.variantText = undefined;
     this.counts = undefined;
     this.swatches = [];
+    this.skinTiles = [];
+    this.previewSkin = false;
+    this.skinPage = 0;
+    this.skinGallery = undefined;
     this.editChar = undefined;
     if (this.editCharUid) return this.createEdit(this.editCharUid);
     this.bp = this.blueprintId && hasBlueprint(this.blueprintId) ? getBlueprint(this.blueprintId) : undefined;
@@ -150,27 +162,30 @@ export class CraftScene extends BaseScene {
     const card = new Card(this, 40, 146, 820, 560, { title: this.editChar?.name ?? bp.name, aside: 'Кубы', onBack: () => this.back() });
     this.viewCard = card;
     this.bindCubes(card);
-    this.view = modelView(this, card.innerW / 2, (card.innerH - 40) / 2, {
+    const skins = this.editChar ? skinsFor(bp.id) : [];
+    const galleryH = skins.length ? 136 : 0;
+    this.view = modelView(this, card.innerW / 2, (card.innerH - 40 - galleryH) / 2 + 20, {
       blocks: bp.blocks,
       width: card.innerW - 30,
-      height: card.innerH - 70,
+      height: card.innerH - 70 - galleryH,
       interactive: true,
       maxBlockPx: 52,
       yaw: bp.kind === 'character' ? 180 : 0, // персонажи повёрнуты на 180°, как в «Персонажах» и «Чертежах»
       showFront: bp.kind === 'character', // откуда бьют: перёд закрывай бронёй, слабое прячь в глубину
       colorOf: (i) => {
-        if (this.editChar) return STAT_COLOR[this.cells[i] ?? this.orig[i]];
+        if (this.editChar) return this.previewSkin ? skinColorOf(this.editChar.blueprintId, this.editSkinId, i) ?? STAT_COLOR[this.cells[i] ?? this.orig[i]] : STAT_COLOR[this.cells[i] ?? this.orig[i]];
         if (this.isChar()) {
           const s = this.assigned.get(i);
           return s ? STAT_COLOR[s] : undefined;
         }
         return bp.blocks[i].tinted && this.variant ? parseInt(this.variant.tint.slice(1), 16) : undefined;
       },
+      pattern: this.editChar && this.previewSkin ? skinPatternOf(this.editChar.blueprintId, this.editSkinId) : undefined,
       lookOf: this.lookOf,
       // у персонажа пустые места подсвечены цветом статы, которой встанет следующий куб
       ghostColor: (i) => {
         // изменение: разбитый куб — цвет своей статы; пустое место — цвет кисти или исходный
-        if (this.editChar) return STAT_COLOR[this.locked.has(i) ? this.orig[i] : this.allocator?.currentBrush ?? this.orig[i]];
+        if (this.editChar) return this.previewSkin ? skinColorOf(this.editChar.blueprintId, this.editSkinId, i) ?? STAT_COLOR[this.orig[i]] : STAT_COLOR[this.locked.has(i) ? this.orig[i] : this.allocator?.currentBrush ?? this.orig[i]];
         if (!this.isChar() || !this.counts || !this.allocator) return GHOST_ACCENT;
         const s = this.allocator.currentBrush ?? nextStat(this.counts, this.assigned, STATS[0]);
         return s ? STAT_COLOR[s] : GHOST_BLOCK;
@@ -178,21 +193,114 @@ export class CraftScene extends BaseScene {
     });
     this.view.on('blockclick', (i: number) => (this.editChar ? this.editClick(i) : this.place(i)));
     card.content.add(this.view);
+    if (skins.length) {
+      const boxX = card.innerW - 218;
+      const box = this.add.rectangle(boxX, 16, 16, 16, 0xd8c6a0).setStrokeStyle(2, 0x4a2a12, 1);
+      const check = text(this, boxX, 15, '✓', { kind: 'mono', size: 18, weight: 700, color: COLOR.ink }).setOrigin(0.5).setVisible(false);
+      const label = text(this, boxX + 16, 16, 'Предпросмотр скина', { size: 12, color: COLOR.ink }).setOrigin(0, 0.5);
+      const hit = this.add.zone(boxX + 100, 16, 220, 30).setInteractive({ useHandCursor: true });
+      hit.on('pointerup', () => {
+        if (isDragRelease(this)) return;
+        this.previewSkin = !this.previewSkin;
+        check.setVisible(this.previewSkin);
+        this.view?.redraw();
+      });
+      attachTooltip(hit, () => ({ title: 'Предпросмотр скина', note: 'Показать выбранный скин вместо цветов статов в редакторе.' }));
+      card.content.add([box, check, label, hit]);
+      this.buildSkinGallery(card, bp, skins);
+    }
 
     const y = card.innerH - 18;
-    const left = this.add.image(card.innerW - 110, y, TEX.arrowLeft).setScale(1.8).setInteractive({ useHandCursor: true });
-    const right = this.add.image(card.innerW - 30, y, TEX.arrowRight).setScale(1.8).setInteractive({ useHandCursor: true });
+    const arrowY = Math.max(150, (card.innerH - galleryH - 40) / 2) + 20;
+    const left = this.add.image(40, arrowY, TEX.arrowLeft).setScale(1.8).setInteractive({ useHandCursor: true });
+    const right = this.add.image(card.innerW - 40, arrowY, TEX.arrowRight).setScale(1.8).setInteractive({ useHandCursor: true });
     left.on('pointerup', () => !isDragRelease(this) && this.view?.rotateBy(-1));
     right.on('pointerup', () => !isDragRelease(this) && this.view?.rotateBy(1));
     card.content.add([left, right]);
-    this.placeHint = text(this, 0, y - 8, 'Клик по силуэту — поставить куб', { size: 13, color: COLOR.inkQuiet }).setOrigin(0, 0.5);
-    card.content.add(this.placeHint);
-    const note = this.editChar ? `Кубы спишутся при подтверждении: ${EDIT_COST} за каждый изменённый` : 'Кубы спишутся, когда модель собрана целиком';
-    card.content.add(text(this, 0, y + 9, note, { size: 11, color: COLOR.inkQuiet }).setOrigin(0, 0.5));
+    if (!this.editChar) {
+      this.placeHint = text(this, 0, y - 8, 'Клик по силуэту — поставить куб', { size: 13, color: COLOR.inkQuiet }).setOrigin(0, 0.5);
+      card.content.add(this.placeHint);
+      card.content.add(text(this, 0, y + 9, 'Кубы спишутся, когда модель собрана целиком', { size: 11, color: COLOR.inkQuiet }).setOrigin(0, 0.5));
+    }
     this.input.keyboard?.on('keydown-LEFT', () => this.view?.rotateBy(-1));
     this.input.keyboard?.on('keydown-Q', () => this.view?.rotateBy(-1));
     this.input.keyboard?.on('keydown-RIGHT', () => this.view?.rotateBy(1));
     this.input.keyboard?.on('keydown-E', () => this.view?.rotateBy(1));
+  }
+
+  /** Галерея скинов уже собранного бойца: по три превью на страницу, закрытые — чёрно-белые. */
+  private buildSkinGallery(card: Card, bp: Blueprint, skins: CharacterSkin[]) {
+    this.skinGallery?.destroy(true);
+    const c = this.add.container(0, 0);
+    card.content.add(c);
+    this.skinGallery = c;
+    this.skinTiles = [];
+    const perPage = 3;
+    const pages = Math.max(1, Math.ceil(skins.length / perPage));
+    this.skinPage = Phaser.Math.Clamp(this.skinPage, 0, pages - 1);
+    const shown = skins.slice(this.skinPage * perPage, this.skinPage * perPage + perPage);
+    const tileW = 176;
+    const tileH = 104;
+    const gap = 12;
+    const y = card.innerH - 125;
+    const total = shown.length * tileW + (shown.length - 1) * gap;
+    const x0 = (card.innerW - total) / 2;
+    c.add(text(this, x0, y - 18, 'СКИНЫ', { size: 11, color: COLOR.inkQuiet, letterSpacing: 1 }));
+    const gray = (color: number) => {
+      const r = (color >> 16) & 0xff, g = (color >> 8) & 0xff, b = color & 0xff;
+      const v = Math.round((r * 0.3 + g * 0.59 + b * 0.11) * 0.55);
+      return (v << 16) | (v << 8) | v;
+    };
+    shown.forEach((skin, i) => {
+      const x = x0 + i * (tileW + gap);
+      const locked = !!skin.locked;
+      c.add(panel(this, x, y, tileW, tileH, locked ? 'brown' : 'beige'));
+      const colorOf = (block: number) => locked ? gray(skin.colors[block]) : skin.colors[block];
+      const preview = modelView(this, x + tileW / 2, y + 40, {
+        blocks: bp.blocks,
+        width: tileW - 24,
+        height: 66,
+        maxBlockPx: 11,
+        yaw: 180,
+        colorOf,
+        ghostColor: colorOf,
+        pattern: skin.pattern,
+        lookOf: this.lookOf,
+      });
+      c.add(preview);
+      c.add(text(this, x + tileW / 2, y + 91, skin.name, { size: 15, weight: locked ? 700 : 400, color: locked ? COLOR.light : COLOR.ink }).setOrigin(0.5, 0.5));
+      const frame = this.add.rectangle(x + tileW / 2, y + tileH / 2, tileW, tileH, 0, 0).setStrokeStyle(3, 0x4a2a12, 0);
+      const check = text(this, x + tileW - 18, y + 12, '✓', { kind: 'mono', size: 20, weight: 700, color: COLOR.ink }).setOrigin(0.5).setVisible(false);
+      c.add([frame, check]);
+      if (locked) c.add(text(this, x + 12, y + 12, 'ЗАКРЫТ', { size: 11, weight: 700, color: COLOR.light, letterSpacing: 1 }).setOrigin(0, 0.5));
+      const hit = this.add.zone(x + tileW / 2, y + tileH / 2, tileW, tileH).setInteractive({ useHandCursor: !locked });
+      attachTooltip(hit, () => ({ title: skin.name, note: locked ? 'Скин закрыт.' : 'Клик — выбрать этот скин.' }));
+      if (!locked) hit.on('pointerup', () => {
+        if (isDragRelease(this) || !this.editChar) return;
+        this.editSkinId = skin.id;
+        this.editChanged();
+      });
+      c.add(hit);
+      this.skinTiles.push({ id: skin.id, frame, check });
+    });
+    if (pages > 1) {
+      const arrowY = y + tileH / 2;
+      const left = this.add.image(40, arrowY, TEX.arrowLeft).setScale(1.5).setInteractive({ useHandCursor: true });
+      const right = this.add.image(card.innerW - 40, arrowY, TEX.arrowRight).setScale(1.5).setInteractive({ useHandCursor: true });
+      left.on('pointerup', () => {
+        if (isDragRelease(this) || this.skinPage <= 0) return;
+        this.skinPage--;
+        this.buildSkinGallery(card, bp, skins);
+      });
+      right.on('pointerup', () => {
+        if (isDragRelease(this) || this.skinPage >= pages - 1) return;
+        this.skinPage++;
+        this.buildSkinGallery(card, bp, skins);
+      });
+      c.add([left, right]);
+      c.add(text(this, card.innerW / 2, card.innerH - 4, `${this.skinPage + 1} / ${pages}`, { kind: 'mono', size: 12, color: COLOR.inkQuiet }).setOrigin(0.5));
+    }
+    if (this.costText?.active) this.refreshEdit();
   }
 
   private buildPanel(bp: Blueprint) {
@@ -383,15 +491,16 @@ export class CraftScene extends BaseScene {
     c.add([autoFrame, autoBg, autoLabel]);
     this.swatches.push({ s: null, frame: autoFrame });
     STATS.forEach((st, k) => {
-      const x = 200 + k * 40;
-      const frame = this.add.rectangle(x, 16, 34, 34, 0xffffff, 0).setStrokeStyle(3, 0x4a2a12, 0);
-      const sw = this.add.rectangle(x, 16, 26, 26, STAT_COLOR[st]).setStrokeStyle(1, 0x000000, 0.4).setInteractive({ useHandCursor: true });
+      const x = 200 + k * 48;
+      const frame = this.add.rectangle(x, 16, 46, 32, 0xffffff, 0).setStrokeStyle(3, 0x4a2a12, 0);
+      const sw = this.add.rectangle(x, 16, 40, 26, STAT_COLOR[st]).setStrokeStyle(1, 0x000000, 0.4).setInteractive({ useHandCursor: true });
+      const label = text(this, x, 16, STAT_SHORT[st], { kind: 'mono', size: 11, weight: 700, color: '#ffffff' }).setOrigin(0.5).setStroke('#2b1a0a', 2);
       sw.on('pointerup', () => !isDragRelease(this) && this.allocator?.setBrush(this.allocator.currentBrush === st ? null : st));
       attachTooltip(sw, () => ({
         title: STAT_LABEL[st],
         note: edit ? 'Клик по кубу — перекрасить в этот цвет, по пустому месту — поставить этим цветом.' : 'Кубы ставятся этим цветом, ползунки подстраиваются сами. Клик по поставленному кубу — перекрасить.',
       }));
-      c.add([frame, sw]);
+      c.add([frame, sw, label]);
       this.swatches.push({ s: st, frame });
     });
     this.onBrushChanged();
@@ -535,6 +644,8 @@ export class CraftScene extends BaseScene {
     this.orig = [...c.blockStats];
     this.locked = new Set(c.brokenBlocks);
     this.cells = [...c.blockStats];
+    this.origSkinId = c.skinId ?? defaultSkinId(c.blueprintId);
+    this.editSkinId = this.origSkinId;
     this.setupScreen({ title: 'Изменить персонажа', subtitle: `${c.name} · ${bp.name}`, back: null, tab: 'characters' });
     this.input.keyboard?.on('keydown-ESC', () => {
       if (!this.children.list.some((o) => o instanceof Modal)) this.back();
@@ -601,11 +712,13 @@ export class CraftScene extends BaseScene {
   private editChanged() {
     this.allocator?.setCounts(cellCounts(this.cells));
     this.view?.setLookOf(this.lookOf);
+    this.view?.redraw();
     this.refreshEdit();
   }
 
   private resetEdit() {
     this.cells = [...this.orig];
+    this.editSkinId = this.origSkinId;
     this.editChanged();
   }
 
@@ -617,33 +730,50 @@ export class CraftScene extends BaseScene {
     const have = cubeCount(store.state);
     this.costText.setText(`Цена ${cost} куб. · есть ${have}`).setColor(have >= cost ? COLOR.ink : COLOR.lose);
     const delta = editDelta(this.orig, this.cells);
-    this.deltaText?.setText(
-      changed || holes
-        ? `Изменено кубов: ${changed}${delta.length ? `\n${delta.map(([s, d]) => `${STAT_SHORT[s]} ${d > 0 ? '+' : '−'}${Math.abs(d)}`).join(' · ')}` : ''}`
-        : 'Без изменений',
-    );
+    const skinChanged = this.editSkinId !== this.origSkinId;
+    const changes: string[] = [];
+    if (changed || holes) changes.push(`Изменено кубов: ${changed}${delta.length ? `\n${delta.map(([s, d]) => `${STAT_SHORT[s]} ${d > 0 ? '+' : '−'}${Math.abs(d)}`).join(' · ')}` : ''}`);
+    if (skinChanged) {
+      const before = resolveSkin(this.editChar.blueprintId, this.origSkinId)?.name ?? 'Оригинал';
+      const after = resolveSkin(this.editChar.blueprintId, this.editSkinId)?.name ?? 'Оригинал';
+      changes.push(`Скин: ${before} → ${after}`);
+    }
+    this.deltaText?.setText(changes.length ? changes.join('\n') : 'Без изменений');
     this.autoHint
       .setText(
         holes
           ? `Пустых мест: ${holes} — поставь кубы (клик по месту или ползунок вверх).`
           : have < cost
             ? `Не хватает ${cost - have} куб.`
-            : changed
-              ? 'Убрал и вернул тем же цветом — бесплатно. Подтверди, чтобы сохранить.'
+            : changed || skinChanged
+              ? 'Подтверди, чтобы сохранить изменения.'
               : 'Перекрась кубы кистью или подвинь ползунки: ползунок вниз убирает кубы, вверх — ставит в пустые места.',
       )
       .setColor(holes || have < cost ? COLOR.lose : COLOR.inkQuiet);
     this.confirmBtn?.setCaption(cost ? `Подтвердить · ${cost} куб.` : 'Подтвердить');
-    this.confirmBtn?.setEnabled(!holes && changed > 0 && have >= cost);
-    this.resetBtn.setEnabled(changed > 0 || holes > 0);
+    this.confirmBtn?.setEnabled(!holes && (changed > 0 || skinChanged) && have >= cost);
+    this.resetBtn.setEnabled(changed > 0 || holes > 0 || skinChanged);
+    const current = store.state.characters.find((c) => c.uid === this.editChar!.uid) ?? this.editChar;
+    const currentSkin = this.editSkinId ?? current.skinId ?? defaultSkinId(current.blueprintId);
+    for (const skin of this.skinTiles) {
+      const selected = currentSkin === skin.id;
+      skin.frame.setStrokeStyle(3, selected ? 0x4a2a12 : 0x6b5438, selected ? 1 : 0.35);
+      skin.check.setVisible(selected);
+    }
   }
 
   private confirmEdit() {
     const c = this.editChar;
     if (!c) return;
-    const next = applyCharacterEdit(store.state, c.uid, this.cells);
-    if (!next) return this.cameras.main.shake(120, 0.003);
-    store.act('editCharacter', c.uid, [...this.cells]);
+    const cubesChanged = editChanges(this.orig, this.cells) > 0;
+    const skinChanged = !!this.editSkinId && this.editSkinId !== this.origSkinId;
+    if (!cubesChanged && !skinChanged) return;
+    if (cubesChanged) {
+      const next = applyCharacterEdit(store.state, c.uid, this.cells);
+      if (!next) return this.cameras.main.shake(120, 0.003);
+      store.act('editCharacter', c.uid, [...this.cells]);
+    }
+    if (skinChanged) store.act('setSkin', c.uid, this.editSkinId!);
     this.cameras.main.flash(180, 255, 236, 180);
     this.time.delayedCall(200, () => this.go(SCENE.characters, { charUid: c.uid } satisfies CharactersSceneData));
   }
@@ -683,7 +813,7 @@ export class CraftScene extends BaseScene {
       onClick: () => this.scene.restart({ blueprintId: bp.id } satisfies CraftSceneData),
     });
     const toList = new Button(this, w / 2, 270, 'Чертежи', { variant: 'beige', width: 160, height: 48, size: 20, onClick: () => this.go(SCENE.blueprints) });
-    // снаряжение, сумки и зелья надеваются / кладутся в рюкзак в «Персонажах»; камни пока только лежат в инвентаре
+    // снаряжение надевается / кладётся в рюкзак в «Персонажах»; камни пока только лежат в инвентаре
     const toInventory = result.kind === 'item' && getItem(result.itemId).kind === 'gem';
     const toChars = (charUid?: string) => this.go(SCENE.characters, (charUid ? { charUid } : {}) satisfies CharactersSceneData);
     // пришли из ячейки бойца — вместо «Персонажи» сразу «Надеть» / «В рюкзак»

@@ -18,7 +18,7 @@ const stats38 = (): Stat[] => [...Array(13).fill('Strength'), ...Array(13).fill(
 function withLobster(): PlayerState {
   let s = createInitialState({ ...START, unlockAllBlueprints: true }, BLUEPRINTS.map((b) => b.id), maxStack);
   s = completeCraft(s, lobster, { manual: true, maxStack, blockStats: stats38() })!.state;
-  for (const id of ['rustySword', 'rustyAxe', 'magicShieldArtifact', 'rucksack', 'pouch']) s = addItem(s, id, 1, 1);
+  for (const id of ['rustySword', 'rustyAxe', 'magicShieldArtifact']) s = addItem(s, id, 1, 1);
   return s;
 }
 const inv = (s: PlayerState, itemId: string) => s.inventory.find((e) => e.itemId === itemId)!.uid;
@@ -84,13 +84,12 @@ describe('формулы из доки', () => {
 });
 
 describe('персонаж', () => {
-  it('слоты принимают только свой тип, подсумок — никуда', () => {
+  it('слоты принимают только свой тип; рюкзак — не предмет снаряжения', () => {
     expect(slotAccepts(lobster, 0, getItem('rustySword'))).toBe(true);
     expect(slotAccepts(lobster, 2, getItem('rustySword'))).toBe(false);
     expect(slotAccepts(lobster, 2, getItem('magicShieldArtifact'))).toBe(true);
-    expect(slotAccepts(lobster, 'rucksack', getItem('rucksack'))).toBe(true);
-    // подсумок — малый рюкзак на 3 ячейки, надевается в слот рюкзака
-    expect(slotAccepts(lobster, 'rucksack', getItem('pouch'))).toBe(true);
+    expect(slotAccepts(lobster, 'rucksack', getItem('rucksack'))).toBe(false);
+    expect(slotAccepts(lobster, 'rucksack', getItem('pouch'))).toBe(false);
   });
   it('после крафта персонаж уже в списке: пустые слоты, имя меняется', () => {
     let s = withLobster();
@@ -101,13 +100,15 @@ describe('персонаж', () => {
     s = renameCharacter(s, c.uid, '  Клешня  ')!;
     expect(s.characters[0].name).toBe('Клешня');
   });
-  it('рюкзак — в свой слот, подсумок и меч в слот артефакта — нельзя', () => {
-    let s = withLobster();
-    const cu = s.characters[0].uid;
-    s = equip(s, cu, 'rucksack', inv(s, 'rucksack'))!;
-    expect(s.characters[0].rucksack?.itemId).toBe('rucksack');
-    expect(equip(s, cu, 2, inv(s, 'rustySword'))).toBeNull();
-    expect(bagSlots(equip(s, cu, 'rucksack', inv(s, 'pouch'))!.characters[0])).toHaveLength(3);
+  it('новый персонаж: встроенный рюкзак на 3 ячейки и все 6 малых зелий по 5 зарядов', () => {
+    const s = withLobster();
+    const c = s.characters[0];
+    expect(c.rucksackLevel).toBe(1);
+    expect(bagSlots(c)).toHaveLength(3);
+    expect(Object.keys(c.potions)).toHaveLength(6);
+    for (const p of Object.values(c.potions)) expect(p).toEqual({ level: 1, charges: 5 });
+    const withBag = addItem(s, 'rucksack', 1, 1);
+    expect(equip(withBag, c.uid, 'rucksack', inv(withBag, 'rucksack'))).toBeNull();
   });
   it('требование статы: считается с базой 5', () => {
     const noDex: Stat[] = [...Array(26).fill('Strength'), ...Array(12).fill('Stamina')];
@@ -120,7 +121,7 @@ describe('персонаж', () => {
   it('надеть / снять / заменить — предметы не теряются', () => {
     let s = withLobster();
     const cu = s.characters[0].uid;
-    const count = () => s.inventory.length + s.characters[0].equipment.filter(Boolean).length + (s.characters[0].rucksack ? 1 : 0);
+    const count = () => s.inventory.length + s.characters[0].equipment.filter(Boolean).length;
     const before = count();
     s = equip(s, cu, 0, inv(s, 'rustySword'))!;
     expect(s.characters[0].equipment[0]?.itemId).toBe('rustySword');
@@ -143,22 +144,20 @@ describe('персонаж', () => {
     expect(s.characters).toHaveLength(0);
     expect(s.inventory.some((e) => e.itemId === 'rustySword')).toBe(true);
   });
-  it('рюкзак: ячейки появляются с рюкзаком, зелья кладутся и вынимаются, при снятии — в инвентарь', () => {
+  it('во встроенный рюкзак кладутся ресурсы и снаряжение, но не старые зелья и сумки', () => {
     let s = withLobster();
     const cu = s.characters[0].uid;
-    expect(bagSlots(s.characters[0])).toHaveLength(0);
-    s = equip(s, cu, 'rucksack', inv(s, 'rucksack'))!;
-    expect(bagSlots(s.characters[0])).toHaveLength(6);
-    const vial = s.inventory.find((e) => e.itemId === 'restoreStrengthVial')!;
-    expect(putInBag(s, cu, 0, inv(s, 'pouch'))).toBeNull(); // сумка в рюкзак не кладётся; оружие и зелья — да
-    s = putInBag(s, cu, 0, vial.uid)!;
-    expect(bagSlots(s.characters[0])[0]).toMatchObject({ itemId: 'restoreStrengthVial', count: 5 });
-    expect(s.inventory.some((e) => e.itemId === 'restoreStrengthVial')).toBe(false);
+    expect(bagSlots(s.characters[0])).toHaveLength(3);
+    s = addItem(s, 'whetstone', 5, 100);
+    s = putInBag(s, cu, 0, inv(s, 'whetstone'))!;
+    expect(bagSlots(s.characters[0])[0]).toMatchObject({ itemId: 'whetstone', count: 5 });
+    expect(s.inventory.some((e) => e.itemId === 'whetstone')).toBe(false);
     s = takeFromBag(s, cu, 0)!;
-    expect(s.inventory.find((e) => e.itemId === 'restoreStrengthVial')?.count).toBe(5);
-    s = putInBag(s, cu, 1, inv(s, 'restoreArmorVial'))!;
-    s = unequip(s, cu, 'rucksack')!;
-    expect(s.characters[0].bag).toEqual([]);
-    expect(s.inventory.find((e) => e.itemId === 'restoreArmorVial')?.count).toBe(5);
+    expect(s.inventory.find((e) => e.itemId === 'whetstone')?.count).toBe(5);
+    s = addItem(s, 'restoreArmorVial', 5, 10);
+    expect(putInBag(s, cu, 1, inv(s, 'restoreArmorVial'))).toBeNull();
+    s = addItem(s, 'pouch', 1, 1);
+    expect(putInBag(s, cu, 1, inv(s, 'pouch'))).toBeNull();
+    expect(unequip(s, cu, 'rucksack')).toBeNull();
   });
 });

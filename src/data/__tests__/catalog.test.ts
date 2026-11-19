@@ -95,3 +95,16 @@ describe('камни', () => {
     expect(blueprintCost(bp)).toBe(19);
   });
 });
+
+describe('скины Варана', () => {
+  it('шесть полных покубных скинов; по умолчанию — песчаный; цвет не зависит от статов', async () => {
+    const { CHARACTER_SKINS, defaultSkinId, skinColorOf } = await import('../skins');
+    const skins = CHARACTER_SKINS.filter((s) => s.blueprintId === 'bp-waran');
+    expect(skins.map((s) => s.id)).toEqual(['waran-desert', 'waran-rock', 'waran-emerald', 'waran-sunset', 'waran-ice', 'waran-albino']);
+    expect(skins[5].locked).toBe(true);
+    expect(defaultSkinId('bp-waran')).toBe('waran-desert');
+    for (const skin of skins) expect(skin.colors).toHaveLength(getBlueprint('bp-waran').blocks.length);
+    expect(skinColorOf('bp-waran', 'waran-rock', 0)).not.toBe(skinColorOf('bp-waran', 'waran-desert', 0));
+    expect(skinColorOf('bp-lobster', undefined, 0)).toBeUndefined();
+  });
+});

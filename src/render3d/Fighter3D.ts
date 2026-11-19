@@ -7,6 +7,7 @@ import {
 import type { BlockGeometry, CharacterBlueprintSlot, ItemModel } from '../data/types';
 import { IDLE_KEYS, IDLE_PERIOD_MS, SLOT_SCALE, samplePose } from '../render/anim';
 import { eulerMatrix, quatMatrix, type Mat3 } from '../render/iso';
+import { skinColorOf } from '../data/skins';
 import type { Arena3D } from './Arena3D';
 import { BLOCK_EDGES, blockGeometry, blockMaterial, unityColor } from './blocks';
 import { CLIPS, sampleBody, sampleWeapon, weaponStyleOf, type BodyPose, type Clip, type WeaponStyle } from './clips';
@@ -34,10 +35,10 @@ export const setFromMat3 = (out: Matrix4, m: Mat3, k: number, t: [number, number
 type BlockMesh = Mesh<BufferGeometry, MeshStandardMaterial>;
 
 /** Блок — меш и материал из Unity-клиента (render3d/blocks.ts). */
-function blockMesh(b: BlockGeometry, color: number): BlockMesh {
+function blockMesh(b: BlockGeometry, color: number, pattern?: 'spots'): BlockMesh {
   const cube = b.shape === 'cube';
   const opacity = b.opacity ?? 1;
-  const mesh = new Mesh(blockGeometry(b.shape), blockMaterial(b.shape, color, opacity));
+  const mesh = new Mesh(blockGeometry(b.shape), blockMaterial(b.shape, color, opacity, pattern));
   mesh.matrixAutoUpdate = false;
   setFromMat3(mesh.matrix, b.quat ? quatMatrix(b.quat) : eulerMatrix(b.rot), b.scale ?? 1, b.pos);
   mesh.castShadow = opacity >= 1;
@@ -55,6 +56,9 @@ function gemTint(effects?: readonly string[]): number | undefined {
 
 export interface Fighter3DOpts {
   side: 'player' | 'enemy';
+  blueprintId: string;
+  skinId?: string;
+  pattern?: 'spots';
   blocks: BlockGeometry[];
   slots: CharacterBlueprintSlot[];
   equipped: Array<ItemModel | null>;
@@ -160,7 +164,7 @@ export class Fighter3D {
 
     this.solid = opts.blocks.map((_, i) => opts.alive(i));
     opts.blocks.forEach((b, i) => {
-      const mesh = blockMesh(b, opts.colorOf(i));
+      const mesh = blockMesh(b, skinColorOf(opts.blueprintId, opts.skinId, i) ?? opts.colorOf(i), opts.pattern);
       this.meshes.push(mesh);
       this.baseColors.push(mesh.material.color.clone());
       this.unity.add(mesh);

@@ -2,30 +2,30 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { START, BLUEPRINTS, getBlueprint, getItem } from '../../data/catalog';
 import type { CharacterBlueprint, Stat } from '../../data/types';
 import {
-  LOBBY_REGEN_MS, setLossRule, SHARDS_PER_CUBE, convertShards, drinkFromBag, endRun, equipFromBag, finishFight, forfeitIfInBattle, lobbyRegen,
-  markInBattle, startRun, stowToBag, SERIES_RETRIES, retriesLeft, surrenderRun, drinkPotion, potionSources, enemyLoot, takeLoot, fullRegenIn, repairAll, repairCost, repairCostForStat,
+  LOBBY_REGEN_MS, setLossRule, SHARDS_PER_CUBE, convertShards, endRun, equipFromBag, finishFight, forfeitIfInBattle, lobbyRegen,
+  markInBattle, startRun, stowToBag, SERIES_RETRIES, retriesLeft, surrenderRun, drinkPotion, enemyLoot, takeLoot, fullRegenIn, repairAll, repairCost, repairCostForStat,
   activeCharacter, healFull, seriesRetries, setSeriesRetries,
 } from '../arena';
 import { discardFromBag, equip, moveInBag, putInBag } from '../character';
 import { completeCraft } from '../craft';
 import { SHARD_ID, SHARD_STACK, addItem, createInitialState, cubeCount, itemCount, type PlayerState } from '../state';
 
-const maxStack = (id: string) => { const it = getItem(id); return it.kind === 'potion' ? it.maxStack : 1; };
+const maxStack = (id: string) => { const it = getItem(id); return 'maxStack' in it ? it.maxStack : 1; };
 const lobster = getBlueprint('bp-lobster') as CharacterBlueprint;
 const stats38 = (): Stat[] => [...Array(13).fill('Strength'), ...Array(13).fill('Dexterity'), ...Array(12).fill('Stamina')];
 
-/** Лобстер с мечом в левой руке, щитом в первом артефакте и рюкзаком с зельями силы. */
+/** Лобстер с мечом, щитом, улучшенным рюкзаком и осколками в ячейке. */
 function ready(): { s: PlayerState; uid: string } {
   let s = createInitialState({ ...START, unlockAllBlueprints: true }, BLUEPRINTS.map((b) => b.id), maxStack);
   s = completeCraft(s, lobster, { manual: true, maxStack, blockStats: stats38() })!.state;
-  for (const id of ['rustySword', 'rustyAxe', 'magicShieldArtifact', 'rucksack']) s = addItem(s, id, 1, 1);
-  s = addItem(s, 'restoreStrengthFlask', 2, maxStack('restoreStrengthFlask'));
+  for (const id of ['rustySword', 'rustyAxe', 'magicShieldArtifact']) s = addItem(s, id, 1, 1);
+  s = addItem(s, SHARD_ID, 2, SHARD_STACK);
   const uid = s.characters[0].uid;
+  s = { ...s, characters: [{ ...s.characters[0], rucksackLevel: 2, potions: { ...s.characters[0].potions, Strength: { level: 2, charges: 5 } } }] };
   const inv = (id: string) => s.inventory.find((e) => e.itemId === id)!.uid;
   s = equip(s, uid, 0, inv('rustySword'))!;
   s = equip(s, uid, 2, inv('magicShieldArtifact'))!;
-  s = equip(s, uid, 'rucksack', inv('rucksack'))!;
-  s = putInBag(s, uid, 0, inv('restoreStrengthFlask'))!;
+  s = putInBag(s, uid, 0, inv(SHARD_ID))!;
   s = putInBag(s, uid, 1, inv('rustyAxe'))!;
   return { s, uid };
 }
@@ -33,7 +33,7 @@ function ready(): { s: PlayerState; uid: string } {
 const win = (broken: number[], _items: string[] = []) => ({ win: true, brokenBlocks: broken, enemyBroken: 22, seed: 7 });
 
 describe('серия арены', () => {
-  // эти тесты описывают правило «drop» (оружие и рюкзак пропадают); в конфиге серия с ботами — «keep»
+  // эти тесты описывают правило «drop» (оружие и содержимое рюкзака пропадают); для ботов в конфиге — «keep»
   beforeAll(() => setLossRule({ bots: 'drop', players: 'drop' }));
   afterAll(() => setLossRule(null));
   it('победа: разбитые кубы остаются, сам лут не падает — его забирают в рюкзак (takeLoot)', () => {
@@ -43,31 +43,29 @@ describe('серия арены', () => {
     const out = finishFight(st, win([0, 1, 2]))!;
     const c = out.state.characters[0];
     expect(c.brokenBlocks).toEqual([0, 1, 2]);
-    expect(c.bag.filter(Boolean)).toHaveLength(2); // как было: флаконы и топор
+    expect(c.bag.filter(Boolean)).toHaveLength(2); // как было: осколки и топор
     expect(out.state.arenaRun).toMatchObject({ fight: 2, wins: 1, inBattle: false });
     const loot = enemyLoot([{ id: 'rustyDagger', itemLevel: 7 }, null], [{ itemId: 'restoreStrengthFlask', count: 2 }], 22);
     expect(loot).toEqual([
       { itemId: 'rustyDagger', count: 1, level: 7 },
-      { itemId: 'restoreStrengthFlask', count: 2 },
       { itemId: SHARD_ID, count: 22 },
     ]);
-    // кинжал — в ячейку 3, с уровнем экземпляра
+    // кинжал — в ячейку 4, с уровнем экземпляра; зелья в лут не попадают
     let r = takeLoot(out.state, uid, loot[0], 3)!;
     expect(r.left).toBe(0);
     expect(r.state.characters[0].bag[3]).toMatchObject({ itemId: 'rustyDagger', level: 7 });
-    // флаконы без ячейки — докладываются к своим (2 + 2)
+    // осколки без ячейки — докладываются к своим (2 + 22)
     r = takeLoot(r.state, uid, loot[1])!;
-    expect(r.state.characters[0].bag[0]).toMatchObject({ itemId: 'restoreStrengthFlask', count: 4 });
+    expect(r.state.characters[0].bag[0]).toMatchObject({ itemId: SHARD_ID, count: 24 });
     // в занятую чужим предметом ячейку — нельзя
-    expect(takeLoot(r.state, uid, loot[2], 3)).toBeNull();
-    r = takeLoot(r.state, uid, loot[2])!;
-    expect(r.state.characters[0].bag.some((e) => e?.itemId === SHARD_ID && e.count === 22)).toBe(true);
+    expect(takeLoot(r.state, uid, loot[1], 3)).toBeNull();
+    expect(r.state.characters[0].bag.some((e) => e?.itemId === SHARD_ID && e.count === 24)).toBe(true);
     const done = endRun(r.state);
     expect(done.arenaRun).toBeNull();
     expect(done.characters[0].bag.some((e) => e?.itemId === SHARD_ID)).toBe(true); // лут остаётся в рюкзаке
   });
 
-  it('поражение: оружие в руках и рюкзак с содержимым пропадают, артефакт остаётся, осколки сгорают', () => {
+  it('поражение: оружие и содержимое рюкзака пропадают, уровень рюкзака и артефакт остаются', () => {
     const { s, uid } = ready();
     let st = startRun(s, uid)!;
     st = finishFight(st, win([]))!.state;
@@ -76,9 +74,10 @@ describe('серия арены', () => {
     const c = out.state.characters[0];
     expect(c.equipment[0]).toBeNull();
     expect(c.equipment[2]?.itemId).toBe('magicShieldArtifact');
-    expect(c.rucksack).toBeNull();
+    expect(c.rucksackLevel).toBe(2);
     expect(c.bag).toEqual([]);
-    expect(out.lost).toEqual(expect.arrayContaining(['rustySword', 'rucksack', 'rustyAxe', 'restoreStrengthFlask']));
+    expect(out.lost).toEqual(expect.arrayContaining(['rustySword', 'rustyAxe', SHARD_ID]));
+    expect(out.lost).not.toContain('rucksack');
     expect(out.state.arenaRun).toBeNull();
     expect(c.brokenBlocks).toEqual([5]);
   });
@@ -87,11 +86,11 @@ describe('серия арены', () => {
     const { s, uid } = ready();
     const st = forfeitIfInBattle(markInBattle(startRun(s, uid)!)!);
     expect(st.arenaRun).toMatchObject({ fight: 1, inBattle: false, retriesUsed: 1 });
-    expect(st.characters[0].rucksack).not.toBeNull();
+    expect(st.characters[0].rucksackLevel).toBe(2);
     const none = { ...st, arenaRun: { ...st.arenaRun!, retriesUsed: SERIES_RETRIES } };
     const lost = forfeitIfInBattle(markInBattle(none)!);
     expect(lost.arenaRun).toBeNull();
-    expect(lost.characters[0].rucksack).toBeNull();
+    expect(lost.characters[0].rucksackLevel).toBe(2);
   });
 
   it(`повторы: ${SERIES_RETRIES} на всю серию — тот же противник, боец как до боя, ничего не пропадает; сдаться — поражение`, () => {
@@ -116,7 +115,7 @@ describe('серия арены', () => {
     const fresh = finishFight(markInBattle(startRun(ready().s, uid)!)!, { win: false, brokenBlocks: [], enemyBroken: 0, seed: 1 })!;
     const sur = surrenderRun(fresh.state)!;
     expect(sur.state.arenaRun).toBeNull();
-    expect(sur.lost).toEqual(expect.arrayContaining(['rustySword', 'rucksack']));
+    expect(sur.lost).toEqual(expect.arrayContaining(['rustySword', 'rustyAxe']));
   });
 
   it('до первого боя бойца можно переодеть, но не сменить; противник зафиксирован', () => {
@@ -146,26 +145,27 @@ describe('серия арены', () => {
     expect(equipFromBag(st, uid, st.characters[0].bag.findIndex((e) => e?.itemId === 'rustySword'), 2)).toBeNull();
   });
 
-  it('зелье из рюкзака чинит кубы своей статы и тратится', () => {
+  it('флакон персонажа чинит 5 кубов своей статы и тратит заряд', () => {
     const { s, uid } = ready();
-    let st = finishFight(startRun(s, uid)!, win([0, 1, 2, 3, 30]))!.state; // 0–3 — сила, 30 — выносливость
-    expect(drinkFromBag(startRun(s, uid)!, uid, 0)).toBeNull(); // целый боец — нечего чинить
-    st = drinkFromBag(st, uid, 0)!; // флакон — 3 куба
-    expect(st.characters[0].brokenBlocks).toEqual([3, 30]);
-    expect(st.characters[0].bag[0]?.count).toBe(1);
+    let st = finishFight(startRun(s, uid)!, win([0, 1, 2, 3, 4, 30]))!.state; // 0–4 — сила, 30 — выносливость
+    expect(drinkPotion(startRun(s, uid)!, uid, 'Strength')).toBeNull(); // целый боец — нечего чинить
+    st = drinkPotion(st, uid, 'Strength')!;
+    expect(st.characters[0].brokenBlocks).toEqual([30]);
+    expect(st.characters[0].potions.Strength).toEqual({ level: 2, charges: 4 });
+    expect(st.characters[0].bag[0]?.count).toBe(2); // содержимое рюкзака не тратится
   });
 
-  it('в лобби зелье пьётся и из инвентаря, в серии — только из рюкзака', () => {
+  it('малое зелье чинит 3 куба, сначала выбранный; при возвращении в лобби заряды восстанавливаются', () => {
     const { s, uid } = ready();
-    let st = addItem(s, 'restoreStrengthVial', 2, maxStack('restoreStrengthVial'));
-    st = { ...st, characters: [{ ...st.characters[0], brokenBlocks: [0, 1] }] };
-    const inv = st.inventory.find((e) => e.itemId === 'restoreStrengthVial')!.uid;
-    const after = drinkPotion(st, uid, { kind: 'inv', uid: inv }, 1)!;
-    expect(after.characters[0].brokenBlocks).toEqual([0]); // сначала выбранный куб
-    expect(after.inventory.find((e) => e.uid === inv)!.count).toBe(st.inventory.find((e) => e.uid === inv)!.count - 1);
-    const inSeries = finishFight(startRun(st, uid)!, win([0, 1], []))!.state;
-    expect(drinkPotion(inSeries, uid, { kind: 'inv', uid: inv })).toBeNull();
-    expect(potionSources(inSeries, inSeries.characters[0], 'Strength').every((x) => x.src.kind === 'bag')).toBe(true);
+    let st = { ...s, characters: [{ ...s.characters[0], brokenBlocks: [0, 1, 2], potions: { ...s.characters[0].potions, Strength: { level: 1, charges: 5 } } }] };
+    const after = drinkPotion(st, uid, 'Strength', 1)!;
+    expect(after.characters[0].brokenBlocks).toEqual([]);
+    expect(after.characters[0].potions.Strength.charges).toBe(4);
+    const inSeries = finishFight(startRun(after, uid)!, win([0, 1], []))!.state;
+    expect(drinkPotion(inSeries, uid, 'Strength')).not.toBeNull();
+    const empty = { ...inSeries, characters: [{ ...inSeries.characters[0], potions: { ...inSeries.characters[0].potions, Strength: { level: 1, charges: 0 } } }] };
+    expect(drinkPotion(empty, uid, 'Strength')).toBeNull();
+    expect(endRun(empty).characters[0].potions.Strength.charges).toBe(5);
   });
 
   it('осколки → кубы по курсу', () => {
@@ -206,18 +206,18 @@ describe('после победы', () => {
 });
 
 describe('рюкзак: перетаскивание между ячейками', () => {
-  it('в пустую — переезд, на другое — обмен, на то же зелье — докладывается; в серии тоже можно', () => {
-    const { s, uid } = ready(); // 0 — 2 флакона силы, 1 — топор
+  it('в пустую — переезд, на другое — обмен, на тот же ресурс — докладывается; в серии тоже можно', () => {
+    const { s, uid } = ready(); // 0 — 2 осколка, 1 — топор
     let st = moveInBag(s, uid, 1, 4)!;
     expect(st.characters[0].bag[1]).toBeNull();
     expect(st.characters[0].bag[4]?.itemId).toBe('rustyAxe');
     st = moveInBag(st, uid, 0, 4)!;
     expect(st.characters[0].bag[0]?.itemId).toBe('rustyAxe');
-    expect(st.characters[0].bag[4]).toMatchObject({ itemId: 'restoreStrengthFlask', count: 2 });
-    st = addItem(st, 'restoreStrengthFlask', 9, maxStack('restoreStrengthFlask'));
-    st = putInBag(st, uid, 2, st.inventory.find((e) => e.itemId === 'restoreStrengthFlask')!.uid)!;
-    st = moveInBag(st, uid, 2, 4)!; // 9 + 2, стопка до 10: в 4 — 10, в 2 — 1
-    expect(st.characters[0].bag[4]?.count).toBe(10);
+    expect(st.characters[0].bag[4]).toMatchObject({ itemId: SHARD_ID, count: 2 });
+    st = addItem(st, SHARD_ID, 99, SHARD_STACK);
+    st = putInBag(st, uid, 2, st.inventory.find((e) => e.itemId === SHARD_ID)!.uid)!;
+    st = moveInBag(st, uid, 2, 4)!; // 99 + 2, стопка до 100: в 4 — 100, в 2 — 1
+    expect(st.characters[0].bag[4]?.count).toBe(100);
     expect(st.characters[0].bag[2]?.count).toBe(1);
     expect(moveInBag(st, uid, 3, 0)).toBeNull(); // из пустой — нечего
     const inSeries = finishFight(markInBattle(startRun(st, uid)!)!, win([], []))!.state;
@@ -230,9 +230,9 @@ describe('починка за кубы', () => {
     const vial = getBlueprint(getItem('restoreStrengthVial').blueprintId!).blocks.length;
     const flask = getBlueprint(getItem('restoreStrengthFlask').blueprintId!).blocks.length;
     const cheapest = (n: number) => {
-      let best = Infinity;
-      for (let f = 0; f <= Math.ceil(n / 3); f++) best = Math.min(best, f * flask + Math.max(0, n - 3 * f) * vial);
-      return best;
+      const dp = [0];
+      for (let k = 1; k <= n; k++) dp[k] = Math.min(vial + dp[Math.max(0, k - 3)], flask + dp[Math.max(0, k - 5)]);
+      return dp[n];
     };
     for (const n of [1, 2, 3, 4, 7]) expect(repairCostForStat('Strength', n)).toBe(cheapest(n));
     const { s, uid } = ready(); // 0..12 — сила, 13..25 — ловкость

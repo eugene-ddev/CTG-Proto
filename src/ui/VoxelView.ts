@@ -25,6 +25,8 @@ export interface VoxelViewOpts {
   height: number;
   /** Цвет блока; undefined — цвет из чертежа или нейтральный. */
   colorOf?: (index: number) => number | undefined;
+  /** Процедурный узор на видимых гранях блоков. */
+  pattern?: 'spots';
   /** Как рисовать блок: обычный, силуэт (можно поставить), еле заметный контур (ещё нельзя), не рисовать. */
   lookOf?: (index: number) => BlockLook;
   /** Цвет подсветки пустых мест (ghost); по умолчанию GHOST_ACCENT. */
@@ -529,6 +531,7 @@ export class VoxelView extends Phaser.GameObjects.Container {
         // стекло: светлое и полупрозрачное, контур заметнее заливки
         g.fillStyle(shade(base, f.light), (f.opacity < 1 ? f.opacity * 0.55 : 1) * alpha).fillPoints(pts, true);
         g.lineStyle(1, shade(base, f.light * 0.62), 0.9 * f.opacity * alpha).strokePoints(pts, true);
+        if (mode === 'solid' && this.opts.pattern === 'spots') this.drawSpots(g, pts, base, f.light, alpha);
       }
     }
     if (this.opts.outlineOf) {
@@ -548,6 +551,21 @@ export class VoxelView extends Phaser.GameObjects.Container {
     this.hasGhost = hasGhost;
     this.drawSlots();
     return this;
+  }
+
+  /** Пятна только внутри выпуклой видимой грани — 2D-запасной вариант текстурной маски. */
+  private drawSpots(g: Phaser.GameObjects.Graphics, pts: Phaser.Math.Vector2[], base: number, light: number, alpha: number) {
+    const poly = new Phaser.Geom.Polygon(pts);
+    const cx = pts.reduce((n, p) => n + p.x, 0) / pts.length;
+    const cy = pts.reduce((n, p) => n + p.y, 0) / pts.length;
+    const w = Math.max(...pts.map((p) => p.x)) - Math.min(...pts.map((p) => p.x));
+    const h = Math.max(...pts.map((p) => p.y)) - Math.min(...pts.map((p) => p.y));
+    const r = Math.max(1, Math.min(w, h) * 0.12);
+    g.fillStyle(shade(base, light * 0.58), 0.55 * alpha);
+    for (const [dx, dy, k] of [[0, 0, 1], [-0.23, 0.12, 0.65], [0.22, -0.15, 0.8]]) {
+      const x = cx + w * dx, y = cy + h * dy;
+      if (Phaser.Geom.Polygon.Contains(poly, x, y)) g.fillEllipse(x, y, r * 2 * k, r * 1.5 * k);
+    }
   }
 
   private baseColor(i: number): number {

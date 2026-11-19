@@ -1,12 +1,12 @@
 // Рюкзак бойца: между боями серии (и в лобби) — выпить зелье, сменить оружие или артефакт.
-// Содержимое рюкзака под риском: при поражении на арене он пропадает вместе с оружием в руках.
+// Содержимое рюкзака под риском: при поражении в PvP оно пропадает вместе с оружием в руках; уровень рюкзака остаётся.
 import Phaser from 'phaser';
-import { getBlueprint, getItem, hasItem } from '../data/catalog';
+import { COMBAT, getBlueprint, getItem, hasItem } from '../data/catalog';
 import { STAT_LABEL_GEN, itemRows } from '../data/labels';
 import { withUpgrade } from './upgradeTip';
 import { STATS, type CharacterBlueprint, type Item } from '../data/types';
-import { potionEffect } from '../core/arena';
 import { bagSlots, characterStats, itemOf, requirementGap } from '../core/character';
+import { rucksackUpgradeInfo } from '../core/upgrade';
 import { enableSlotDrag } from './bagDrag';
 import { store } from '../game/store';
 import { Button } from './Button';
@@ -14,8 +14,10 @@ import { crossButton } from './CrossButton';
 import { createItemIcon } from './ItemIcon';
 import { Modal } from './Modal';
 import { dottedLine } from './Panel';
+import { POTION_BELT_HEIGHT, potionBelt } from './PotionBelt';
 import { Slot } from './Slot';
 import { text } from './text';
+import { attachTooltip } from './Tooltip';
 import { COLOR, STAT_COLOR } from './theme';
 
 const CELL = 64;
@@ -27,7 +29,7 @@ export function openRucksack(scene: Phaser.Scene, charUid: string, opts: { title
   // рюкзаки на 12 и 18 ячеек — в два ряда: окно выше
   const perRow = Math.floor((760 - 60 + 10) / (CELL + 10));
   const extraRows = Math.max(0, Math.ceil((opened ? bagSlots(opened).length : 0) / perRow) - 1);
-  const m = new Modal(scene, { title: opts.title ?? 'Рюкзак', width: 760, height: 520 + extraRows * (CELL + 10) });
+  const m = new Modal(scene, { title: opts.title ?? 'Рюкзак и зелья', width: 760, height: 630 + extraRows * (CELL + 10) });
   const body = scene.add.container(0, 0);
   m.card.content.add(body);
   const w = m.card.innerW;
@@ -42,6 +44,18 @@ export function openRucksack(scene: Phaser.Scene, charUid: string, opts: { title
     const stats = characterStats(bp, c.blockStats);
     if (opts.note) body.add(text(scene, 0, -4, opts.note, { size: 13, color: COLOR.inkQuiet, wrap: w }));
     let y = opts.note ? 26 : 0;
+
+    body.add(text(scene, 0, y, 'ЗЕЛЬЯ ПЕРСОНАЖА', { size: 12, color: COLOR.inkQuiet, letterSpacing: 1 }));
+    body.add(potionBelt(scene, c, 0, y + 20, render));
+    const bagUp = rucksackUpgradeInfo(store.state, charUid)!;
+    const nextCapacity = COMBAT.characterUpgrades.rucksackLevels[bagUp.level]?.capacity;
+    const up = new Button(scene, w - 145, y + 48, bagUp.reason === 'max' ? 'Рюкзак · максимум' : `Рюкзак ${cells.length} → ${nextCapacity} · 1 набор`, {
+      variant: 'beige', width: 290, height: 44, size: 15,
+      onClick: () => store.act('upgradeRucksack', charUid),
+    }).setEnabled(bagUp.ok);
+    attachTooltip(up.hit, () => ({ title: 'Набор кожевника', rows: [['Нужно', '1'], ['Есть', String(bagUp.have)]], note: 'Уровень и ячейки рюкзака сохраняются при поражении.' }));
+    body.add(up);
+    y += POTION_BELT_HEIGHT + 42;
 
     // надето: руки и артефакты
     body.add(text(scene, 0, y, 'НАДЕТО', { size: 12, color: COLOR.inkQuiet, letterSpacing: 1 }));
@@ -69,35 +83,20 @@ export function openRucksack(scene: Phaser.Scene, charUid: string, opts: { title
     y += CELL + 18;
 
     // ячейки рюкзака
-    body.add(text(scene, 0, y, cells.length ? `РЮКЗАК · ${cells.filter(Boolean).length}/${cells.length}` : 'РЮКЗАКА НЕТ', { size: 12, color: COLOR.inkQuiet, letterSpacing: 1 }));
+    body.add(text(scene, 0, y, `РЮКЗАК · ${cells.filter(Boolean).length}/${cells.length}`, { size: 12, color: COLOR.inkQuiet, letterSpacing: 1 }));
     y += 20;
-    if (!cells.length) {
-      body.add(text(scene, 0, y + 4, 'Без рюкзака некуда класть лут и зелья.', { size: 14, color: COLOR.inkQuiet }));
-      y += 40;
-    }
     const bagCells: Slot[] = [];
     // на арене из рюкзака можно выбросить (крестик на ячейке) — освободить место под лут
     const canDiscard = store.state.arenaRun?.charUid === charUid;
     const crosses: Phaser.GameObjects.GameObject[] = [];
     cells.forEach((e, k) => {
       const item = e && hasItem(e.itemId) ? itemOf(e) : null;
-      const heal = item?.kind === 'potion' ? potionEffect(c, item) : 0;
       const cx = CELL / 2 + (k % perRow) * (CELL + 10);
       const cy = y + CELL / 2 + Math.floor(k / perRow) * (CELL + 10);
       const s = new Slot(scene, cx, cy, {
         size: CELL,
-        tooltip: () => {
-          if (!item) return null;
-          const tip = withUpgrade({ title: item.name, rows: itemRows(item).map((r) => [r.label, r.value, r.color] as [string, string, string?]) }, item);
-          return item.kind === 'potion' ? { ...tip, note: heal ? `Клик — выпить: +${heal} куб.` : 'Нечего чинить — кубы этой статы целы.' } : tip;
-        },
+        tooltip: () => item ? withUpgrade({ title: item.name, rows: itemRows(item).map((r) => [r.label, r.value, r.color] as [string, string, string?]) }, item) : null,
         onClick: () => {
-          // зелье пьётся сразу по клику, если есть что чинить; остальное — выбирается
-          if (item?.kind === 'potion' && heal > 0) {
-            pick = null;
-            if (!store.act('drinkPotion', charUid, { kind: 'bag', cell: k })) render();
-            return;
-          }
           pick = item ? { kind: 'bag', cell: k } : null;
           render();
         },
@@ -137,20 +136,15 @@ export function openRucksack(scene: Phaser.Scene, charUid: string, opts: { title
       if (item) {
         body.add(text(scene, 0, y, item.name, { kind: 'display', size: 20 }));
         y += 30;
-        if (item.kind === 'potion') {
-          // сюда попадает только зелье, которое сейчас не выпить (иначе клик выпил бы его сразу)
-          body.add(text(scene, 0, y + 6, 'Нечего чинить — кубы этой статы целы.', { size: 13, color: COLOR.inkQuiet }));
-        } else {
-          const targets = bp.slots
-            .map((sl, k) => ({ sl, k }))
-            .filter(({ sl }) => (item.kind === 'weapon' && sl.type === 'Hand') || (item.kind === 'artifact' && sl.type === 'Artifact'));
-          const gap = requirementGap(item as Item, stats);
-          targets.forEach(({ sl, k }, i) => {
-            const name = sl.type === 'Hand' ? (sl.isLeftHand ? 'В левую руку' : 'В правую руку') : `В слот А${k - 1}`;
-            act(name, 100 + i * 214, () => store.act('equipFromBag', charUid, cell, k), gap <= 0);
-          });
-          if (gap > 0) body.add(text(scene, 0, y + 50, `Не хватает ${gap} ${STAT_LABEL_GEN[(item as Extract<Item, { scalingStat: unknown }>).scalingStat]}.`, { size: 13, color: '#c0281e' }));
-        }
+        const targets = bp.slots
+          .map((sl, k) => ({ sl, k }))
+          .filter(({ sl }) => (item.kind === 'weapon' && sl.type === 'Hand') || (item.kind === 'artifact' && sl.type === 'Artifact'));
+        const gap = requirementGap(item as Item, stats);
+        targets.forEach(({ sl, k }, i) => {
+          const name = sl.type === 'Hand' ? (sl.isLeftHand ? 'В левую руку' : 'В правую руку') : `В слот А${k - 1}`;
+          act(name, 100 + i * 214, () => store.act('equipFromBag', charUid, cell, k), gap <= 0);
+        });
+        if (gap > 0) body.add(text(scene, 0, y + 50, `Не хватает ${gap} ${STAT_LABEL_GEN[(item as Extract<Item, { scalingStat: unknown }>).scalingStat]}.`, { size: 13, color: '#c0281e' }));
       }
     } else if (pick?.kind === 'slot') {
       const e = c.equipment[pick.slot];

@@ -20,14 +20,39 @@ describe('миграция сейва', () => {
     };
     const s = migrate(old);
     // до версии 4 были открыты все чертежи — теперь стартовый набор, остальное открывается пергаментом
-    expect(s.unlockedBlueprints).toEqual(['bp-waran', 'bp-sword', 'bp-potion-vial', 'bp-pouch']);
+    expect(s.unlockedBlueprints).toEqual(['bp-waran', 'bp-sword']);
     expect(s.unlockedBlueprints).not.toContain('bp-gem');
     expect(s.manuallyCrafted).toEqual(['bp-sword']);
     expect(s.inventory.map((e) => e.itemId)).toEqual(['rustySword']);
     expect('models' in s).toBe(false);
     expect(s.characters).toHaveLength(1); // модель варана стала персонажем, модель удалённого чертежа — нет
-    expect(s.characters[0]).toMatchObject({ name: 'Варан 1', blueprintId: 'bp-waran', brokenBlocks: [], rucksack: null });
+    expect(s.characters[0]).toMatchObject({ name: 'Варан 1', blueprintId: 'bp-waran', brokenBlocks: [], rucksackLevel: 1, potions: { Strength: { level: 1, charges: 5 } } });
     expect(s.characters[0].blockStats).toHaveLength(22);
+  });
+
+  it('старый надетый рюкзак сохраняет уровень; старые зелья и сумки перестают быть предметами', () => {
+    const old = {
+      ...freshState(),
+      version: 4,
+      inventory: [
+        { uid: 'i1', itemId: 'restoreStrengthVial', count: 5 },
+        { uid: 'i2', itemId: 'rucksack', count: 1 },
+        { uid: 'i3', itemId: SHARD_ID, count: 2 },
+      ],
+      characters: [{
+        uid: 'c1', name: 'Старый', blueprintId: 'bp-waran', blockStats: Array(22).fill('Strength'), brokenBlocks: [],
+        equipment: [null, null, null, null, null], rucksack: { uid: 'bag1', itemId: 'rucksackHuge' },
+        potions: { Strength: { level: 2, charges: 10 } },
+        bag: [{ uid: 'i1', itemId: 'restoreStrengthVial', count: 5 }, { uid: 'i3', itemId: SHARD_ID, count: 2 }],
+      }],
+      models: [],
+    } as unknown as Parameters<typeof migrate>[0];
+    const s = migrate(old);
+    expect(s.characters[0].rucksackLevel).toBe(4);
+    expect(s.characters[0].bag).toEqual([null, expect.objectContaining({ itemId: SHARD_ID, count: 2 })]);
+    expect(s.inventory.map((e) => e.itemId)).toEqual([SHARD_ID]);
+    expect(s.characters[0].potions.Strength).toEqual({ level: 2, charges: 5 });
+    expect(s.characters[0].potions.Luck).toEqual({ level: 1, charges: 5 });
   });
 
   it('сейв до v2: счётчики кубов и осколков (и осколки серии) становятся предметами', () => {
