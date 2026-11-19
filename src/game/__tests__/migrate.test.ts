@@ -1,8 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { freshState, migrate } from '../store';
-import { SHARD_ID, STATE_VERSION, cubeCount, itemCount } from '../../core/state';
+import { SHARD_ID, STATE_VERSION, cubeCount, itemCount, normalizeState } from '../../core/state';
 
 describe('миграция сейва', () => {
+  it('сейв v6: ранее выбранный закрытый скин сбрасывается', () => {
+    const base = migrate({ ...freshState(), models: [{ uid: 'm1', blueprintId: 'bp-waran' }] });
+    const old = { ...base, version: 6, characters: [{ ...base.characters[0], skinId: 'waran-rock' }] };
+    expect(normalizeState(old)).toEqual(base);
+    expect(migrate(old).characters[0]).toEqual(base.characters[0]);
+  });
   it('старый сейв: открыты только стартовые чертежи, удалённые предметы и чертежи убраны', () => {
     const old = {
       ...freshState(),

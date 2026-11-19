@@ -5,7 +5,7 @@
 import { BLUEPRINTS, COMBAT, ITEMS, START, maxStackOf } from '../data/catalog';
 import type { ArenaRun } from '../core/arena';
 import { browserStorage, type KeyValueStorage } from '../core/save';
-import { SHARD_ID, SHARD_STACK, STATE_VERSION, addCubes, addItem, createInitialState, newCharacterPotions, normalizeCharacter, type PlayerState } from '../core/state';
+import { SHARD_ID, SHARD_STACK, addCubes, addItem, createInitialState, newCharacterPotions, normalizeCharacter, normalizeState, type PlayerState } from '../core/state';
 import { freshArenaProfile, setSeriesRetries, type ArenaProfile } from '../core/arena';
 import { applyAction, isServerSeeded, stateHash, type ActionArgs, type ActionCall, type ActionName } from '../core/actions';
 import { randomSeed } from '../core/rng';
@@ -341,7 +341,7 @@ export function migrate(input: PlayerState & { models?: LegacyModel[]; cubes?: n
   };
   if (oldCubes) s = addCubes(s, oldCubes);
   if ((oldShards ?? 0) + runShards > 0) s = addItem(s, SHARD_ID, (oldShards ?? 0) + runShards, SHARD_STACK);
-  s = { ...s, version: STATE_VERSION };
+  s = normalizeState({ ...s, version: s.version ?? 1 });
   for (const m of models) {
     if (!hasBlueprint(m.blueprintId)) continue;
     const bp = getBlueprint(m.blueprintId);

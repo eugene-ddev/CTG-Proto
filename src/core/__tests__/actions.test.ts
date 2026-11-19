@@ -234,8 +234,8 @@ describe('стартовый набор и «+ все предметы»', () =>
     s = applyAction(s, 'upgradeRucksack', [uid], ctx)!;
     expect(s.characters[0].rucksackLevel).toBe(2);
     expect(bagSlots(s.characters[0])).toHaveLength(6);
-    s = applyAction(s, 'setSkin', [uid, 'waran-rock'], ctx)!;
-    expect(s.characters[0].skinId).toBe('waran-rock');
+    expect(s.characters[0].skinId).toBeUndefined();
+    expect(applyAction(s, 'setSkin', [uid, 'waran-rock'], ctx)).toBeNull();
     expect(applyAction(s, 'setSkin', [uid, 'waran-missing'], ctx)).toBeNull();
     expect(applyAction(s, 'setSkin', [uid, 'waran-albino'], ctx)).toBeNull();
   });

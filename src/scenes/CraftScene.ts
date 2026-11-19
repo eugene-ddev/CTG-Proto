@@ -5,7 +5,7 @@ import { BaseScene } from './BaseScene';
 import { SCENE, type CharactersSceneData, type CraftSceneData } from './keys';
 import { BLUEPRINT_KIND_LABEL, COMBAT, getBlueprint, getItem, hasBlueprint } from '../data/catalog';
 import { STAT_LABEL, STAT_SHORT, variantDescription } from '../data/labels';
-import { defaultSkinId, resolveSkin, skinColorOf, skinPatternOf, skinsFor, type CharacterSkin } from '../data/skins';
+import { resolveSkin, skinColorOf, skinPatternOf, skinsFor, type CharacterSkin } from '../data/skins';
 import { STATS, type Blueprint, type BlueprintVariant, type Stat } from '../data/types';
 import { buildOrder, frontier, adjacency } from '../core/build';
 import { layeredStats } from '../core/layout';
@@ -193,7 +193,7 @@ export class CraftScene extends BaseScene {
     });
     this.view.on('blockclick', (i: number) => (this.editChar ? this.editClick(i) : this.place(i)));
     card.content.add(this.view);
-    if (skins.length) {
+    if (skins.some((skin) => !skin.locked)) {
       const boxX = card.innerW - 218;
       const box = this.add.rectangle(boxX, 16, 16, 16, 0xd8c6a0).setStrokeStyle(2, 0x4a2a12, 1);
       const check = text(this, boxX, 15, '✓', { kind: 'mono', size: 18, weight: 700, color: COLOR.ink }).setOrigin(0.5).setVisible(false);
@@ -207,8 +207,8 @@ export class CraftScene extends BaseScene {
       });
       attachTooltip(hit, () => ({ title: 'Предпросмотр скина', note: 'Показать выбранный скин вместо цветов статов в редакторе.' }));
       card.content.add([box, check, label, hit]);
-      this.buildSkinGallery(card, bp, skins);
     }
+    if (skins.length) this.buildSkinGallery(card, bp, skins);
 
     const y = card.innerH - 18;
     const arrowY = Math.max(150, (card.innerH - galleryH - 40) / 2) + 20;
@@ -644,7 +644,7 @@ export class CraftScene extends BaseScene {
     this.orig = [...c.blockStats];
     this.locked = new Set(c.brokenBlocks);
     this.cells = [...c.blockStats];
-    this.origSkinId = c.skinId ?? defaultSkinId(c.blueprintId);
+    this.origSkinId = resolveSkin(c.blueprintId, c.skinId)?.id;
     this.editSkinId = this.origSkinId;
     this.setupScreen({ title: 'Изменить персонажа', subtitle: `${c.name} · ${bp.name}`, back: null, tab: 'characters' });
     this.input.keyboard?.on('keydown-ESC', () => {
@@ -754,7 +754,7 @@ export class CraftScene extends BaseScene {
     this.confirmBtn?.setEnabled(!holes && (changed > 0 || skinChanged) && have >= cost);
     this.resetBtn.setEnabled(changed > 0 || holes > 0 || skinChanged);
     const current = store.state.characters.find((c) => c.uid === this.editChar!.uid) ?? this.editChar;
-    const currentSkin = this.editSkinId ?? current.skinId ?? defaultSkinId(current.blueprintId);
+    const currentSkin = this.editSkinId ?? resolveSkin(current.blueprintId, current.skinId)?.id;
     for (const skin of this.skinTiles) {
       const selected = currentSkin === skin.id;
       skin.frame.setStrokeStyle(3, selected ? 0x4a2a12 : 0x6b5438, selected ? 1 : 0.35);
