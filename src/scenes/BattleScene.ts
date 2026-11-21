@@ -3,12 +3,12 @@ import { BaseScene } from './BaseScene';
 import { createRunBattle, resolveFight, type FightInputs } from '../core/fight';
 import { lossRule, type RivalInfo } from '../core/arena';
 import { SCENE, type BattleSceneData, type CharactersSceneData, type OpponentSceneData } from './keys';
-import { EFFECTS, getBlueprint, getItem, hasItem, itemModel, weaponStrike } from '../data/catalog';
+import { COMBAT, EFFECTS, getBlueprint, getItem, hasItem, itemModel, weaponStrike } from '../data/catalog';
 import { skinColorOf, skinPatternOf } from '../data/skins';
 import { FACE_LEFT, FACE_RIGHT, attackStyleOf, type AttackStyle } from '../render/anim';
 import { PATTERN_LABEL, STAT_LABEL_GEN, STAT_SHORT, disabledEffect, effectParts, patternDescription, statDisabledTitle, turns, weaponPerkText } from '../data/labels';
-import type { EffectId, Stat } from '../data/types';
-import { THRESHOLDS, canUseArtifact, critOf, dodgeOf, patternOf, slotDamageValue, step, useArtifact, type BattleEvent, type BattleState, type Fighter, type Side } from '../core/battle';
+import type { EffectId, Stat, WeaponPattern } from '../data/types';
+import { THRESHOLDS, canUseArtifact, critOf, dodgeOf, patternOf, perkOf, slotDamageValue, step, useArtifact, type BattleEvent, type BattleState, type Fighter, type Side } from '../core/battle';
 import { SERIES_LENGTH, seriesRetries, retriesLeft, surrenderRun, type FightOutcome, type LootEntry, type SeriesReward } from '../core/arena';
 import { CUBE_ID } from '../core/state';
 import { bagSlots, itemOf } from '../core/character';
@@ -175,7 +175,7 @@ export class BattleScene extends BaseScene {
   private steps = 0;
   private artifactUses: Array<{ after: number; slot: number }> = [];
   /** Последний удар был критом — его основной урон рисуется золотым. */
-  private lastCrit = false;
+
   /** Удары, чья точка импакта ещё не наступила. */
   private pendingHits = 0;
   /** 3D-рендер боя (three.js); нет — бой рисуется 2D-изометрией. */
@@ -251,7 +251,7 @@ export class BattleScene extends BaseScene {
     // скорость боя — кнопкой справа внизу (над меткой DEBUG); то же переключается в меню паузы
     this.speedBtn = new Button(this, GAME_W - 16 - 78, GAME_H - 72, '', { variant: 'beige', width: 156, height: 44, size: 18, onClick: () => this.toggleSpeed() });
     this.speedBtn.setCaption(this.speedCaption());
-    // остальные кнопки — в меню-бургере справа сверху; на тачскрине левее иконки fullscreen
+    // Меню боя справа сверху, левее иконки полноэкранного режима, если она доступна.
     const burger = new Button(this, GAME_W - (canUseFullscreen() ? 96 : 44), 44, '', { variant: 'beige', width: 56, height: 50, onClick: () => this.pause() });
     const lines = this.add.graphics();
     lines.fillStyle(0x4a2a12, 1);
@@ -504,6 +504,7 @@ export class BattleScene extends BaseScene {
   }
 
   private present(events: BattleEvent[]) {
+    let hit: { pattern: WeaponPattern; crit: boolean; armored: boolean; pierced: boolean } | undefined;
     for (const e of events) {
       switch (e.t) {
         case 'turn':
@@ -516,15 +517,15 @@ export class BattleScene extends BaseScene {
         case 'attack': {
           const atk = this.sides[e.side];
           const def = this.sides[e.side === 'player' ? 'enemy' : 'player'];
-          void atk;
-          this.lastCrit = e.outcome === 'hit' && e.crit;
+          const slot = atk.fighter.slots[e.slot];
+          const pattern = slot ? patternOf(slot) : 'carry';
+          hit = { pattern, crit: e.crit, armored: e.absorbed > 0, pierced: (perkOf(slot?.item).armorIgnore ?? (pattern === 'precise' ? COMBAT.patterns.precise.armorIgnore : 0)) > 0 };
           const where = def.view.blockWorldPos(e.block);
           if (e.outcome === 'evade') {
             def.view.playEvade(EVADE_MS[this.speed]);
             this.float(where.x, where.y, 'УВОРОТ', '#e6e2d8');
           }
           else if (e.outcome === 'shield') this.float(where.x, where.y, 'ЩИТ', '#7fb8ff');
-          else if (e.crit) this.float(where.x, where.y - 20, 'КРИТ!', COLOR.title);
           if (def.view.struck) def.view.struck(e.block, e.outcome, e.crit);
           else if (e.outcome === 'hit') this.splash(where.x, where.y, e.crit);
           else if (e.outcome === 'shield') this.splash(where.x, where.y, false, 0x7fb8ff);
@@ -534,9 +535,10 @@ export class BattleScene extends BaseScene {
         case 'damage': {
           const sv = this.sides[e.side];
           const p = sv.view.blockWorldPos(e.block);
-          const crit = this.lastCrit && e.source === 'attack' && !e.spread;
+          const strike = e.source === 'attack' && !e.spread ? hit : undefined;
+          const crit = strike?.crit;
           const color = e.source === 'burn' ? '#ff8a1f' : e.source === 'poison' ? '#7dff4f' : crit ? '#ffd21f' : e.spread ? '#ff7d6b' : '#ffffff';
-          this.damageNumber(p.x, p.y, e.damage, color, e.spread, e.side);
+          this.damageNumber(p.x, p.y, e.damage, color, e.spread, e.side, strike);
           if (sv.view.damaged) sv.view.damaged(e.block, e.source, e.spread);
           else {
             sv.view.flashBlock(e.block, e.source === 'burn' ? 0xff8a2a : e.source === 'poison' ? 0x8af06a : 0xffffff);
@@ -684,15 +686,64 @@ export class BattleScene extends BaseScene {
    * Число урона летит по параболе «с физикой»: подпрыгивает от места попадания в сторону от атакующего
    * и падает. Чем больше урон — тем крупнее число и тем оно «тяжелее»: ниже прыжок, медленнее в сторону.
    */
-  private damageNumber(x: number, y: number, dmg: number, color: string, spread: boolean, side: Side) {
+  private damageNumber(x: number, y: number, dmg: number, color: string, spread: boolean, side: Side, hit?: { pattern: WeaponPattern; crit: boolean; armored: boolean; pierced: boolean }) {
     const v = Math.round(dmg * 10) / 10;
     const heavy = Phaser.Math.Clamp(dmg / 400, 0, 1); // 0 — лёгкое, 1 — тяжёлое (400+ урона; прочность куба — 100)
-    const size = spread ? 18 : Math.round(24 + 26 * heavy);
-    const t = text(this, x, y, `−${v}`, { kind: 'display', size, color })
+    const size = spread ? 18 : Math.round((24 + 26 * heavy) * (hit?.crit ? 1.3 : 1));
+    const label = text(this, 0, 0, `−${v}`, { kind: 'display', size, color })
       .setOrigin(0.5)
       .setStroke('#140a02', spread ? 4 : 6)
       .setShadow(0, 3, '#000000', 4, true, true)
       .setDepth(DEPTH.ui);
+    const t = this.add.container(x, y).setDepth(DEPTH.ui);
+    const fx = this.add.graphics();
+    t.add([fx, label]);
+    const edge = label.width / 2;
+    const h = size / 2;
+    if (hit?.crit) {
+      fx.fillStyle(0xffb72e);
+      for (let i = 0; i < 8; i++) {
+        const a = (i + 0.5) * Math.PI / 4;
+        fx.fillTriangle(Math.cos(a - 0.16) * edge, Math.sin(a - 0.16) * h,
+          Math.cos(a + 0.16) * edge, Math.sin(a + 0.16) * h,
+          Math.cos(a) * (edge + 12), Math.sin(a) * (h + 14));
+      }
+    }
+    fx.lineStyle(3, 0xffdb9c);
+    switch (hit?.pattern) {
+      case 'precise':
+        for (const d of [-1, 1]) {
+          fx.lineBetween(d * (edge + 3), -6, d * (edge + 3), 6);
+          fx.lineBetween(d * edge, 0, d * (edge + 7), 0);
+        }
+        break;
+      case 'cleave':
+        label.setAngle(-10);
+        fx.lineBetween(-edge - 7, h + 3, edge + 5, -h);
+        break;
+      case 'pierce':
+        fx.lineBetween(-edge - 14, 2, edge + 7, 2);
+        fx.fillStyle(0xffdb9c).fillTriangle(edge, -3, edge + 10, 2, edge, 7);
+        break;
+      case 'crush':
+        label.setScale(1.14, 0.88);
+        this.tweens.add({ targets: label, scaleY: 1, duration: 180, ease: 'Back.easeOut' });
+        break;
+      case 'split':
+        fx.fillStyle(0xffab64);
+        for (const d of [-1, 1]) fx.fillTriangle(d * edge, 4, d * (edge + 9), -8, d * (edge + 6), 9);
+        break;
+      case 'carry':
+        fx.lineBetween(-edge, h + 2, edge, h + 2);
+        break;
+    }
+    if (hit?.armored) {
+      const sx = edge * 1.15 + 22;
+      fx.fillStyle(0x72baff).lineStyle(2, 0x19324c);
+      fx.beginPath().moveTo(sx - 8, -9).lineTo(sx + 8, -9).lineTo(sx + 7, 2)
+        .lineTo(sx, 10).lineTo(sx - 7, 2).closePath().fillPath().strokePath();
+      if (hit.pierced) fx.beginPath().moveTo(sx + 2, -8).lineTo(sx - 2, -1).lineTo(sx + 1, 1).lineTo(sx - 2, 6).strokePath();
+    }
     // в сторону от атакующего: урон по противнику летит вправо, по игроку — влево
     const away = side === 'enemy' ? 1 : -1;
     const vx = away * Phaser.Math.FloatBetween(90, 170) * (1 - 0.6 * heavy) * (spread ? 1.2 : 1) + Phaser.Math.FloatBetween(-20, 20);
@@ -1069,23 +1120,23 @@ export class BattleScene extends BaseScene {
       if (out.reward) y = this.rewardSection(body, w, y, out.reward);
       y = this.lootSection(body, w, y, rerender);
       if (out.reward) {
-        add(text(this, 0, y, 'Серия окончена — разбитые кубы начнут восстанавливаться. Лут забери в рюкзак до выхода.', { size: 13, color: COLOR.inkQuiet, wrap: w }));
+        add(text(this, 0, y, 'Серия окончена. Все кубы и заряды зелий восстановлены. Лут забери в рюкзак до выхода.', { size: 13, color: COLOR.inkQuiet, wrap: w }));
       } else {
         const left = SERIES_LENGTH - (store.state.arenaRun?.wins ?? 0);
-        add(text(this, 0, y, `До награды серии ${left === 1 ? 'остался 1 бой' : `осталось ${left} боя`}. На арене разбитые кубы не чинятся — только встроенными зельями.`, { size: 13, color: COLOR.inkQuiet, wrap: w }));
+        add(text(this, 0, y, `До награды серии ${left === 1 ? 'остался 1 бой' : `осталось ${left} боя`}. Между боями кубы можно восстановить встроенными зельями.`, { size: 13, color: COLOR.inkQuiet, wrap: w }));
       }
     } else {
       const lines: Array<[string, string]> = [];
       if (!win && out?.retry) {
         const left = retriesLeft(store.state.arenaRun);
-        lines.push(['Повтор', `Бой можно переиграть: тот же противник, боец вернётся как до боя, ничего не пропадёт. Осталось повторов: ${left} из ${seriesRetries()}.`]);
+        lines.push(['Попытка', `Бой можно переиграть: тот же противник, боец вернётся как до боя, ничего не пропадёт. Осталось попыток: ${left} из ${seriesRetries()}.`]);
         lines.push(['Сдаться', lossRule(this.mode) === 'keep' ? 'Серия закончится поражением; снаряжение и содержимое рюкзака останутся у бойца.' : 'Серия закончится поражением: оружие в руках и содержимое рюкзака пропадут.']);
       } else if (!win && out) {
         const names = out.lost.map((id) => (hasItem(id) ? getItem(id).name : id));
         const keep = lossRule(this.mode) === 'keep';
         lines.push(['Потеряно', names.length ? names.join(', ') : keep ? 'ничего — в серии с ботами при поражении всё остаётся у бойца' : 'ничего — оружия и рюкзака не было']);
-        if (this.mode === 'players') lines.push(['', `Серия с игроками закончена: повторов в ней нет.${this.rival ? ` ${this.rival.name} получит награду за отбитое нападение.` : ''}`]);
-        else if (!this.surrenderedRun) lines.push(['', `Повторы серии кончились (${seriesRetries()} из ${seriesRetries()}).`]);
+        if (this.mode === 'players') lines.push(['', `Серия с игроками закончена. Дополнительных попыток в ней нет.${this.rival ? ` ${this.rival.name} получит награду за отбитое нападение.` : ''}`]);
+        else if (!this.surrenderedRun) lines.push(['', `Попытки закончились (${seriesRetries()} из ${seriesRetries()}).`]);
       } else lines.push(['', 'Бой вне серии — итог не сохраняется.']);
       for (const [k, v] of lines) {
         add(text(this, 0, y, k, { size: 14, weight: 700 }));

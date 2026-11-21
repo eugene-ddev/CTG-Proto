@@ -16,7 +16,7 @@ import { BattleScene } from './scenes/BattleScene';
 import { UiKitScene } from './scenes/UiKitScene';
 import { DebugScene } from './scenes/DebugScene';
 import { ModelsScene } from './scenes/ModelsScene';
-import { setupMobile } from './mobile';
+import { setupViewport } from './mobile';
 
 await loadFonts();
 
@@ -30,7 +30,7 @@ const game = new Phaser.Game({
   scene: [BootScene, LoginScene, MainMenuScene, InventoryScene, BlueprintsScene, CraftScene, CharactersScene, OpponentScene, RivalsScene, LeaderboardScene, BattleScene, UiKitScene, ModelsScene, DebugScene], // Debug последней — рисуется поверх
 });
 
-setupMobile(game);
+setupViewport(game);
 
 // доступ из консоли браузера для отладки
 Object.assign(window, { __game: game, __store: store });

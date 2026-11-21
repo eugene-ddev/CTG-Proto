@@ -7,7 +7,7 @@ import { perkOf } from '../core/battle';
 import { createSpreadView } from './SpreadView';
 import { PATTERN_LABEL, effectDescription, itemDescription, itemRows, itemSummary, patternDescription, weaponPerkText } from '../data/labels';
 import type { Item, ItemKind } from '../data/types';
-import { createItemIcon } from './ItemIcon';
+import { createItemIcon, type PotionCharges } from './ItemIcon';
 import { dottedLine } from './Panel';
 import type { ScrollArea } from './ScrollArea';
 import { Slot } from './Slot';
@@ -30,6 +30,7 @@ export interface ItemInfoRow {
 
 export interface ItemInfoOpts {
   count?: number;
+  potionCharges?: PotionCharges;
   /** Прокачка оружия (камни) и ячейки камней — строки «есть / нужно» и что даст уровень. */
   up?: UpgradeInfo | null;
   cell?: CellInfo | null;
@@ -47,7 +48,7 @@ export function fillItemInfo(scene: Phaser.Scene, area: ScrollArea, item: Item, 
   c.removeAll(true);
   const w = area.w;
   const iconSize = o.up ? 100 : 130;
-  const icon = createItemIcon(scene, item, iconSize) as Phaser.GameObjects.Components.Transform & Phaser.GameObjects.GameObject;
+  const icon = createItemIcon(scene, item, iconSize, o.potionCharges) as Phaser.GameObjects.Components.Transform & Phaser.GameObjects.GameObject;
   icon.setPosition(w / 2, iconSize / 2 + 4);
   c.add(icon);
   let y = iconSize + 14;

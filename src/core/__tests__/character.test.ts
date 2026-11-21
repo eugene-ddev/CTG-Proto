@@ -44,7 +44,9 @@ describe('формулы из доки', () => {
     expect(damageCondition(50, 0)).toBe(0.3);
   });
   it('броня: пол 85%', () => {
-    expect(armorAbsorb(50)).toBeCloseTo(0.5);
+    expect(armorAbsorb(3)).toBeCloseTo(0.2);
+    expect(armorAbsorb(4)).toBeCloseTo(0.25);
+    expect(armorAbsorb(12)).toBeCloseTo(0.5);
     expect(armorAbsorb(10000)).toBe(0.85);
     expect(armorAbsorb(0)).toBe(0);
   });

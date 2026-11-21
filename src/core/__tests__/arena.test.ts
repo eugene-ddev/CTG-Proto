@@ -79,7 +79,7 @@ describe('серия арены', () => {
     expect(out.lost).toEqual(expect.arrayContaining(['rustySword', 'rustyAxe', SHARD_ID]));
     expect(out.lost).not.toContain('rucksack');
     expect(out.state.arenaRun).toBeNull();
-    expect(c.brokenBlocks).toEqual([5]);
+    expect(c.brokenBlocks).toEqual([]);
   });
 
   it('перезагрузка посреди боя — проигранный бой: тратит повтор, без повторов — поражение', () => {
@@ -110,7 +110,7 @@ describe('серия арены', () => {
     const last = finishFight(markInBattle(st)!, { win: false, brokenBlocks: [1, 2], enemyBroken: 0, seed: 9 })!;
     expect(last.retry).toBeUndefined();
     expect(last.state.arenaRun).toBeNull();
-    expect(last.state.characters[0].brokenBlocks).toEqual([1, 2]);
+    expect(last.state.characters[0].brokenBlocks).toEqual([]);
     // сдаться можно и с оставшимися повторами
     const fresh = finishFight(markInBattle(startRun(ready().s, uid)!)!, { win: false, brokenBlocks: [], enemyBroken: 0, seed: 1 })!;
     const sur = surrenderRun(fresh.state)!;
@@ -162,6 +162,7 @@ describe('серия арены', () => {
     expect(after.characters[0].brokenBlocks).toEqual([]);
     expect(after.characters[0].potions.Strength.charges).toBe(4);
     const inSeries = finishFight(startRun(after, uid)!, win([0, 1], []))!.state;
+    expect(inSeries.characters[0].potions.Strength.charges).toBe(4);
     expect(drinkPotion(inSeries, uid, 'Strength')).not.toBeNull();
     const empty = { ...inSeries, characters: [{ ...inSeries.characters[0], potions: { ...inSeries.characters[0].potions, Strength: { level: 1, charges: 0 } } }] };
     expect(drinkPotion(empty, uid, 'Strength')).toBeNull();

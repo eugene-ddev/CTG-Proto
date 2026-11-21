@@ -83,7 +83,7 @@ BALANCE = {
     # 0.0.72: прочность куба 10 → 100, весь урон ×10. 0.0.73: остаток у precise — вглубь столбика; копьё и нож вне
     # ротации (combat.json → outOfRotation); урон подобран тюнером (npm run tune: турнир ур. 1 + бои против ботов, ~47–54%).
     'rustyKnife': dict(damage=85),                   # вне ротации
-    'rustyDagger': dict(damage=36, staminaCost=4.5), # precise, 2 удара за ход
+    'rustyDagger': dict(damage=36, staminaCost=4),   # precise, 2 удара за ход
     'rustySword': dict(damage=240),                  # cleave, кд 2
     'rustySpear': dict(damage=155),                  # вне ротации
     'rustyAxe': dict(cooldown=2, damage=223),        # split

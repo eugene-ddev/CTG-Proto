@@ -934,6 +934,8 @@ export class CharactersScene extends BaseScene {
     if (item.kind === 'weapon' && item.ability.damage > 0) extraRows.push({ label: 'У этого бойца', value: fmt1(slotDamage(item, gear.stats).damage), color: COLOR.lose });
     const gap = requirementGap(item, gear.stats) > 0 ? this.gapText(item, gear.stats) : '';
     const count = sel.kind === 'bag' ? bagSlots(c)[sel.cell]?.count : undefined;
+    const potion = sel.kind === 'potion' ? c.potions[sel.stat] : undefined;
+    const potionCharges = potion ? { left: potion.charges, max: COMBAT.characterUpgrades.potionLevels[potion.level - 1].charges } : undefined;
     const gemsInfo = target ? gemInfo(store.state, target) : null;
     // ячейки камней — прямо в карточке; клик по ячейке открывает выбор камня
     const gems = target && gemsInfo ? { info: gemsInfo, onCell: (k: number) => void openGemPicker(this, target, k) } : null;
@@ -944,7 +946,7 @@ export class CharactersScene extends BaseScene {
     const reserve = rowsBelow * 46 + 6;
     const area = new ScrollArea(this, x0, 26, w, h - reserve);
     this.body.add(area);
-    fillItemInfo(this, area, item, { count, up, cell, gems, extraRows, note: gap ? { text: gap, color: COLOR.lose } : undefined });
+    fillItemInfo(this, area, item, { count, potionCharges, up, cell, gems, extraRows, note: gap ? { text: gap, color: COLOR.lose } : undefined });
     const bw = (w - 8) / 2;
     const yb = 26 + h - 20;
     if (bagUp) {

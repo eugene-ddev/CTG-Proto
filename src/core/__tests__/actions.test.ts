@@ -28,7 +28,7 @@ describe('действия', () => {
     expect(stateHash(a)).toBe(stateHash(b));
   });
 
-  it('серия: противник зависит только от seed действия, время — от ctx.now', () => {
+  it('серия: противник зависит от seed, выход и сдача восстанавливают кубы', () => {
     const s = applyAction(fresh(), 'craft', [craftWaran], ctx)!;
     const uid = s.characters[0].uid;
     const r1 = applyAction(s, 'startRun', [uid], ctx)!;
@@ -37,11 +37,13 @@ describe('действия', () => {
     expect(stateHash(r1)).toBe(stateHash(r2));
     expect(r1.arenaRun?.opp).toBeTruthy();
     expect(JSON.stringify(r3.arenaRun)).not.toBe(JSON.stringify(r1.arenaRun));
-    // поражение без повторов ставит таймер починки по часам действия
-    const lost = applyAction(r1, 'surrenderRun', [], ctx)!;
-    expect(lost.arenaRun).toBeNull();
     const hurt = { ...r1, characters: r1.characters.map((c) => ({ ...c, brokenBlocks: [0, 1] })) };
-    expect(applyAction(hurt, 'endRun', [], ctx)!.characters[0].lobbySince).toBe(ctx.now);
+    for (const action of ['endRun', 'surrenderRun'] as const) {
+      const done = applyAction(hurt, action, [], ctx)!;
+      expect(done.arenaRun).toBeNull();
+      expect(done.characters[0].brokenBlocks).toEqual([]);
+      expect(done.characters[0].lobbySince).toBeUndefined();
+    }
   });
 
   it('отладочные действия помечены', () => {

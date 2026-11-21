@@ -47,9 +47,8 @@ export function potionBelt(scene: Phaser.Scene, c: CharacterState, x: number, y:
         onChange?.();
       },
     });
-    slot.setContent(createItemIcon(scene, item, size - 14));
+    slot.setContent(createItemIcon(scene, item, size - 14, { left: p.charges, max: maxCharges }));
     slot.setSelected(opts.selected === stat);
-    if (p.charges <= 0) slot.setAlpha(0.45);
     out.add(slot);
     out.add(text(scene, cx, size + 5, `${p.charges}/${maxCharges}`, { kind: 'mono', size: 12, weight: 700, color: p.charges ? COLOR.ink : COLOR.lose }).setOrigin(0.5, 0));
   });

@@ -29,13 +29,15 @@ describe('серия арены: длина и награда', () => {
     const cubes0 = cubeCount(s);
     let st = startRun(s, uid)!;
     for (let k = 1; k < SERIES_LENGTH; k++) {
-      const out = finishFight(markInBattle(st)!, win(k))!;
+      const out = finishFight(markInBattle(st)!, { ...win(k), brokenBlocks: [0] })!;
       expect(out.reward).toBeUndefined();
       expect(out.state.arenaRun).toMatchObject({ fight: k + 1, wins: k });
+      expect(out.state.characters[0].brokenBlocks).toEqual([0]);
       st = out.state;
     }
-    const out = finishFight(markInBattle(st)!, win(99))!;
+    const out = finishFight(markInBattle(st)!, { ...win(99), brokenBlocks: [0, 1] })!;
     expect(out.state.arenaRun).toBeNull();
+    expect(out.state.characters[0].brokenBlocks).toEqual([]);
     expect(out.reward!.items).toHaveLength(1);
     expect(Object.keys(out.state.bags)).toContain('reward.drop'); // награда — из мешка игрока
     expect(cubeCount(out.state)).toBe(cubes0 + ARENA.reward.cubes);

@@ -299,7 +299,7 @@ describe('схемы ударов', () => {
 
   it('precise: половина брони не действует', () => {
     const b = setup('rustyKnife', 8);
-    b.enemy.stats.Armor = 50; // поглощение 50 / (50 + 50) = 50%
+    b.enemy.stats.Armor = 12; // 50% до пробития, 25% после
     step(b);
     const atk = b.log.find((e) => e.t === 'attack' && e.side === 'player');
     expect(atk && atk.t === 'attack' && atk.absorbed / (atk.damage + atk.absorbed)).toBeCloseTo(0.25, 5);

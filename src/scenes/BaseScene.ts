@@ -6,6 +6,7 @@ import { drawArenaBackground } from '../ui/Background';
 import { Button } from '../ui/Button';
 import { Modal } from '../ui/Modal';
 import { isTyping } from '../ui/TextField';
+import { attachTooltip } from '../ui/Tooltip';
 import { text } from '../ui/text';
 import { COLOR, GAME_W } from '../ui/theme';
 import { canUseFullscreen, toggleFullscreen } from '../mobile';
@@ -22,6 +23,7 @@ import type { OpponentSceneData } from './keys';
 
 export interface HeaderOpts {
   title: string;
+  titleY?: number;
   /** Мелкая строка над заголовком, как «БОЙ 1 / 1». */
   kicker?: string;
   /** Подзаголовок под заголовком. */
@@ -66,7 +68,7 @@ export abstract class BaseScene extends Phaser.Scene {
       if (sub) text(this, GAME_W / 2, 98, sub, { size: 17, color: COLOR.light }).setOrigin(0.5, 0);
     } else {
       if (opts.kicker) text(this, GAME_W / 2, 26, opts.kicker, { size: 18, color: COLOR.lightQuiet, letterSpacing: 1 }).setOrigin(0.5, 0);
-      text(this, GAME_W / 2, 46, opts.title, { kind: 'display', size: 52, color: COLOR.title }).setOrigin(0.5, 0);
+      text(this, GAME_W / 2, opts.titleY ?? 46, opts.title, { kind: 'display', size: 52, color: COLOR.title }).setOrigin(0.5, 0);
       if (opts.subtitle) text(this, GAME_W / 2, 108, opts.subtitle, { size: 18, color: COLOR.light }).setOrigin(0.5, 0);
     }
 
@@ -99,6 +101,7 @@ export abstract class BaseScene extends Phaser.Scene {
       hit.on('pointerover', () => draw(COLOR.highlight));
       hit.on('pointerout', () => draw(0xa9a7a2));
       hit.on('pointerup', () => { if (!isDragRelease(this)) void toggleFullscreen(); });
+      attachTooltip(hit, () => ({ title: document.fullscreenElement ? 'Выйти из полноэкранного режима' : 'На весь экран' }));
     }
   }
 

@@ -1,22 +1,28 @@
 import Phaser from 'phaser';
 import { getBlueprint, itemModel } from '../data/catalog';
-import type { Item, PotionItem, ResourceItem } from '../data/types';
+import type { BlockGeometry, Item, PotionItem, ResourceItem } from '../data/types';
 import { STAT_COLOR } from './theme';
 import { shade } from '../render/iso';
 import { VoxelView } from './VoxelView';
+
+export interface PotionCharges {
+  left: number;
+  max: number;
+}
 
 /**
  * Иконка предмета: изометрическая модель его чертежа. Запасной вариант для зелья
  * без чертежа — нарисованный флакон цвета статы.
  */
-export function createItemIcon(scene: Phaser.Scene, item: Item, size: number): Phaser.GameObjects.GameObject {
+export function createItemIcon(scene: Phaser.Scene, item: Item, size: number, charges?: PotionCharges): Phaser.GameObjects.GameObject {
   if (item.kind === 'resource') return resourceIcon(scene, item, size);
   if (!item.blueprintId) return item.kind === 'potion' ? potionIcon(scene, item, size) : scene.add.graphics();
   const bp = getBlueprint(item.blueprintId);
   // перекрашиваемые блоки (жидкость зелья, камень) — цвет этого варианта
   const tint = item.kind === 'potion' || item.kind === 'gem' ? parseInt(item.tint.slice(1), 16) : undefined;
   // у оружия модель улучшается с уровнем (data/weaponLooks.ts)
-  const blocks = item.kind === 'weapon' ? itemModel(item.id, item.itemLevel)?.blocks ?? bp.blocks : bp.blocks;
+  const model = item.kind === 'weapon' ? itemModel(item.id, item.itemLevel)?.blocks ?? bp.blocks : bp.blocks;
+  const blocks = item.kind === 'potion' && charges ? potionBlocks(model, charges) : model;
   return new VoxelView(scene, 0, 0, {
     blocks,
     width: size,
@@ -24,6 +30,21 @@ export function createItemIcon(scene: Phaser.Scene, item: Item, size: number): P
     maxBlockPx: size / 4,
     colorOf: tint === undefined ? undefined : (i) => (blocks[i].tinted ? tint : undefined),
   });
+}
+
+/** Оставить геометрию флакона из чертежа и заменить опустевшие кубы прозрачными. */
+function potionBlocks(blocks: BlockGeometry[], { left, max }: PotionCharges): BlockGeometry[] {
+  if (left >= max) return blocks;
+  const bottom = blocks.filter((b) => b.tinted).sort((a, b) => a.pos[1] - b.pos[1])[0];
+  if (!bottom) return blocks;
+  const glass = blocks.map((b) => b.tinted && !(left > 1 && b.pos[1] === bottom.pos[1])
+    ? { ...b, tinted: false, color: '#edf6f8', opacity: b === bottom && left === 1 ? 0.3 : 0.7 }
+    : b);
+  if (left === 1) {
+    const [x, y, z] = bottom.pos;
+    glass.push({ ...bottom, pos: [x, y - 0.1, z], scale: 0.8 });
+  }
+  return glass;
 }
 
 function potionIcon(scene: Phaser.Scene, item: PotionItem, size: number) {
